@@ -4,7 +4,7 @@ import cv2
 from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip
 
 
-def trim_video(video_path, fps, start_second, end_second, trim_folder):
+def trim_video(video_path, fps, skip_frame, start_second, end_second, trim_folder):
     """
     Saving the frames of the video from start_second to end_second
     The name of each frame is "originalname_framecount.jpg".
@@ -19,6 +19,8 @@ def trim_video(video_path, fps, start_second, end_second, trim_folder):
         Path to video to extract
     fps : int
         Frame per second of the video
+    skip_frame: int
+        How many frames we want to skip between each extracted frame?
     start_second: int
         Start of the interval to extract in second
     end_second : int
@@ -36,16 +38,17 @@ def trim_video(video_path, fps, start_second, end_second, trim_folder):
     end_frame = end_second * fps
     while success:
         if start_frame <= count <= end_frame:
-            frame_name = "{}_{}.jpg".format(video_name, count)
-            frame_path = os.path.join(trim_folder, frame_name)
-            cv2.imwrite(frame_path, img)
+            if (count - start_frame) % skip_frame == 0:
+                frame_name = "{}_{}.jpg".format(video_name, count)
+                frame_path = os.path.join(trim_folder, frame_name)
+                cv2.imwrite(frame_path, img)
         elif count > end_frame:
             break
         success, img = vidcap.read()
         count += 1
 
 
-def extract_video_with_timming_file(video_path, fps, timming_file,
+def extract_video_with_timming_file(video_path, fps, skip_frame, timming_file,
                                     trim_folder):
     """
     Read timming interval from a txt file and performing extracting from the video
@@ -65,6 +68,8 @@ def extract_video_with_timming_file(video_path, fps, timming_file,
         Path to video to extract
     fps : int
         Frame per second of the video
+    skip_frame: int
+        How many frames we want to skip between each extracted frame?
     timming_file: str
         The file contains timing intervals
     """
@@ -72,10 +77,14 @@ def extract_video_with_timming_file(video_path, fps, timming_file,
         n = int(f.readline())
         for i in range(n):
             start, end = map(int, f.readline().split())
-            trim_video(video_path, fps, start, end, trim_folder)
+            # Storing each extracted interval in a folder
+            extracted_folder = os.path.join(trim_folder, "{}_{}".format(start, end))
+            os.makedirs(extracted_folder, exist_ok=True)
+            trim_video(video_path, fps, skip_frame, start, end,
+                       extracted_folder)
 
 
 if __name__ == "__main__":
     os.makedirs("trim", exist_ok=True)
     # trim_video("./test.avi", 24,  0, 1, "trim")
-    extract_video_with_timming_file("./test.avi", 24, "./timing.txt", "trim")
+    extract_video_with_timming_file("./op1.mp4", 24, 8, "./op1.txt", "trim")
