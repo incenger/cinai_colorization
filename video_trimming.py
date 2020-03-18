@@ -1,10 +1,11 @@
 import os
+import sys
 
 import cv2
 from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip
 
 
-def trim_video(video_path, fps, skip_frame, start_second, end_second, trim_folder):
+def trim_video(video_path, fps, skip_frame, time_interval, trim_folder):
     """
     Saving the frames of the video from start_second to end_second
     The name of each frame is "originalname_framecount.jpg".
@@ -21,10 +22,9 @@ def trim_video(video_path, fps, skip_frame, start_second, end_second, trim_folde
         Frame per second of the video
     skip_frame: int
         How many frames we want to skip between each extracted frame?
-    start_second: int
-        Start of the interval to extract in second
-    end_second : int
-        End of the interval to extract in second
+    time_interval: list
+        List of sorted time interval (in second) to extract frames
+        E.g: [[1, 3], [4, 6]]
     trim_folder : str
         Folder contains extracted frame
     """
@@ -34,18 +34,40 @@ def trim_video(video_path, fps, skip_frame, start_second, end_second, trim_folde
     vidcap = cv2.VideoCapture(video_path)
     success, img = vidcap.read()
     count = 1
-    start_frame = start_second * fps
-    end_frame = end_second * fps
+    interval_idx = 0
+
+    cut_path = os.path.join(trim_folder, "cut_{}".format(interval_idx))
+    os.makedirs(cut_path, exist_ok=True)
+
     while success:
+        start_frame = time_interval[interval_idx][0] * fps
+        end_frame = time_interval[interval_idx][1] * fps
+
         if start_frame <= count <= end_frame:
             if (count - start_frame) % skip_frame == 0:
                 frame_name = "{}_{}.jpg".format(video_name, count)
-                frame_path = os.path.join(trim_folder, frame_name)
+                frame_path = os.path.join(cut_path, frame_name)
+
+                # print("Saving frame {}  of interval {} => {}".format(
+                #     count, start_frame, end_frame))
+
                 cv2.imwrite(frame_path, img)
+
         elif count > end_frame:
-            break
+            interval_idx += 1
+            if interval_idx == len(time_interval):
+                break
+            # Make folder for new cut
+            cut_path = os.path.join(trim_folder, "cut_{}".format(interval_idx))
+            os.makedirs(cut_path, exist_ok=True)
+
         success, img = vidcap.read()
-        count += 1
+
+        # Workaround when failed to read a frame
+        if interval_idx < len(time_interval) and not success:
+            success = True
+        elif success:
+            count += 1
 
 
 def extract_video_with_timming_file(video_path, fps, skip_frame, timming_file,
@@ -75,16 +97,21 @@ def extract_video_with_timming_file(video_path, fps, skip_frame, timming_file,
     """
     with open(timming_file, "r") as f:
         n = int(f.readline())
+        time_interval = []
         for i in range(n):
             start, end = map(int, f.readline().split())
+            time_interval.append([start, end])
             # Storing each extracted interval in a folder
-            extracted_folder = os.path.join(trim_folder, "{}_{}".format(start, end))
-            os.makedirs(extracted_folder, exist_ok=True)
-            trim_video(video_path, fps, skip_frame, start, end,
-                       extracted_folder)
+            # extracted_folder = os.path.join(trim_folder, "{}_{}".format(start, end))
+            # os.makedirs(extracted_folder, exist_ok=True)
+        trim_video(video_path, fps, skip_frame, time_interval, trim_folder)
 
 
 if __name__ == "__main__":
-    os.makedirs("trim", exist_ok=True)
-    # trim_video("./test.avi", 24,  0, 1, "trim")
-    extract_video_with_timming_file("./op1.mp4", 24, 8, "./op1.txt", "trim")
+    VIDEO_PATH = sys.argv[1]
+    TIMING_FILE = sys.argv[2]
+    TRIM_FOLDER = sys.argv[3]
+    os.makedirs(TRIM_FOLDER, exist_ok=True)
+
+    extract_video_with_timming_file(VIDEO_PATH, 24, 6, TIMING_FILE,
+                                    TRIM_FOLDER)
