@@ -46,7 +46,7 @@ def trim_video(video_path, fps, skip_frame, time_interval, trim_folder):
 
         if start_frame <= count <= end_frame:
             if (count - start_frame) % skip_frame == 0:
-                frame_name = "{}_{}.jpg".format(cut_idx, count)
+                frame_name = "{}_{}.jpg".format(str(cut_idx).zfill(3), count)
                 frame_path = os.path.join(cut_path, frame_name)
 
                 # print("Saving frame {}  of interval {} => {}".format(
@@ -60,7 +60,7 @@ def trim_video(video_path, fps, skip_frame, time_interval, trim_folder):
                 break
             # Make folder for new cut
             cut_path = os.path.join(trim_folder,
-                                    "cut_{}".format(str(cut_idx)).zzfill(3))
+                                    "cut_{}".format(str(cut_idx).zfill(3)))
             os.makedirs(cut_path, exist_ok=True)
 
         success, img = vidcap.read()
