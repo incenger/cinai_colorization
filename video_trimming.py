@@ -1,5 +1,7 @@
 import os
 import sys
+import argparse
+import logging
 
 import cv2
 from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip
@@ -37,7 +39,9 @@ def trim_video(video_path, fps, skip_frame, time_interval, trim_folder):
     count = 1
     cut_idx = 0
 
-    cut_path = os.path.join(trim_folder, "cut_{}".format(cut_idx))
+    cut_path = os.path.join(trim_folder,
+                            "cut_{}".format(str(cut_idx).zfill(3)),
+                            "frames")
     os.makedirs(cut_path, exist_ok=True)
 
     while success:
@@ -49,8 +53,8 @@ def trim_video(video_path, fps, skip_frame, time_interval, trim_folder):
                 frame_name = "{}_{}.jpg".format(str(cut_idx).zfill(3), count)
                 frame_path = os.path.join(cut_path, frame_name)
 
-                # print("Saving frame {}  of interval {} => {}".format(
-                #     count, start_frame, end_frame))
+                logging.info("Saving frame {}  of interval {} => {}".format(
+                    count, start_frame, end_frame))
 
                 cv2.imwrite(frame_path, img)
 
@@ -111,10 +115,16 @@ def extract_video_with_timming_file(video_path, fps, skip_frame, timming_file,
 
 
 if __name__ == "__main__":
-    VIDEO_PATH = sys.argv[1]
-    TIMING_FILE = sys.argv[2]
-    TRIM_FOLDER = sys.argv[3]
-    os.makedirs(TRIM_FOLDER, exist_ok=True)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("video_path")
+    parser.add_argument("timming_file")
+    parser.add_argument("extracted_folder")
+    parser.add_argument("-v", "--verbose", action="store_true")
+    agrs = parser.parse_args()
+    if agrs.verbose:
+        logging.basicConfig(level=logging.INFO)
 
-    extract_video_with_timming_file(VIDEO_PATH, 24, 6, TIMING_FILE,
-                                    TRIM_FOLDER)
+    os.makedirs(agrs.extracted_folder, exist_ok=True)
+
+    extract_video_with_timming_file(agrs.video_path, 24, 6, agrs.timming_file,
+                                    agrs.extracted_folder)
