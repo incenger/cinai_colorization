@@ -60,7 +60,8 @@ def trim_video(video_path, fps, skip_frame, time_interval, trim_folder):
                 break
             # Make folder for new cut
             cut_path = os.path.join(trim_folder,
-                                    "cut_{}".format(str(cut_idx).zfill(3)))
+                                    "cut_{}".format(str(cut_idx).zfill(3)),
+                                    "frames")
             os.makedirs(cut_path, exist_ok=True)
 
         success, img = vidcap.read()
