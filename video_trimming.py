@@ -33,19 +33,20 @@ def trim_video(video_path, fps, skip_frame, time_interval, trim_folder):
 
     vidcap = cv2.VideoCapture(video_path)
     success, img = vidcap.read()
-    count = 1
-    interval_idx = 0
 
-    cut_path = os.path.join(trim_folder, "cut_{}".format(interval_idx))
+    count = 1
+    cut_idx = 0
+
+    cut_path = os.path.join(trim_folder, "cut_{}".format(cut_idx))
     os.makedirs(cut_path, exist_ok=True)
 
     while success:
-        start_frame = time_interval[interval_idx][0] * fps
-        end_frame = time_interval[interval_idx][1] * fps
+        start_frame = time_interval[cut_idx][0] * fps
+        end_frame = time_interval[cut_idx][1] * fps
 
         if start_frame <= count <= end_frame:
             if (count - start_frame) % skip_frame == 0:
-                frame_name = "{}_{}.jpg".format(video_name, count)
+                frame_name = "{}_{}.jpg".format(cut_idx, count)
                 frame_path = os.path.join(cut_path, frame_name)
 
                 # print("Saving frame {}  of interval {} => {}".format(
@@ -54,17 +55,18 @@ def trim_video(video_path, fps, skip_frame, time_interval, trim_folder):
                 cv2.imwrite(frame_path, img)
 
         elif count > end_frame:
-            interval_idx += 1
-            if interval_idx == len(time_interval):
+            cut_idx += 1
+            if cut_idx == len(time_interval):
                 break
             # Make folder for new cut
-            cut_path = os.path.join(trim_folder, "cut_{}".format(interval_idx))
+            cut_path = os.path.join(trim_folder,
+                                    "cut_{}".format(str(cut_idx)).zzfill(3))
             os.makedirs(cut_path, exist_ok=True)
 
         success, img = vidcap.read()
 
         # Workaround when failed to read a frame
-        if interval_idx < len(time_interval) and not success:
+        if cut_idx < len(time_interval) and not success:
             success = True
         elif success:
             count += 1
