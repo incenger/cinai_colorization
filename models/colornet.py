@@ -12,7 +12,7 @@ class Colornet(nn.Module):
         norm_layer = nn.InstanceNorm2d
 
         # Conv block 1
-        conv_block_1 = [nn.Conv2d(6, 64, kernel_size=3, stride=1, padding=1, bias=use_bias), ]
+        conv_block_1 = [nn.Conv2d(5, 64, kernel_size=3, stride=1, padding=1, bias=use_bias), ]
         conv_block_1 += [nn.ReLU(True), ]
         conv_block_1 += [nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1, bias=use_bias), ]
         conv_block_1 += [nn.ReLU(True), ]
@@ -39,6 +39,9 @@ class Colornet(nn.Module):
         conv_block_3 += [nn.MaxPool2d(2, stride=1),]
 
         # Resblock 1
+        # TODO: Add a downsample from 256 -> 512
+        # TODO: Adding before taking relu, might need to read resnet paper
+        # again
         res_block_1 = [nn.Conv2d(256, 512, kernel_size=3, stride=1, padding=1, bias=use_bias), ]
         res_block_1 += [nn.ReLU(True), ]
         res_block_1 += [nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1, bias=use_bias), ]
@@ -135,17 +138,17 @@ class Colornet(nn.Module):
         # Stacking four inputs into 6 channels
 
         # [N, C, H, W]
-        input_stacked = torch.stack((frame_cur, frame_prev, Wab, S), 1)
+        input_stacked = torch.cat((frame_cur, frame_prev, Wab, S), 1)
 
         # Downscale convolution bloc
         conv1 = self.conv_block_1(input_stacked)
-        conv2 = self.conv_block_1(conv1)
-        conv3 = self.conv_block_1(conv2)
+        conv2 = self.conv_block_2(conv1)
+        conv3 = self.conv_block_3(conv2)
 
         # Residual block
         res1 = self.res_block_1(conv3) + conv3
         res2 = self.res_block_2(res1) + res1
-        res3 = self.res_block_1(res2) + res2
+        res3 = self.res_block_3(res2) + res2
 
         # Upscale conv blocks
         cov7_up = self.upscale_7(res3) + self.skip_1_7(conv3)
