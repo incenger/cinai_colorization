@@ -7,7 +7,7 @@ import cv2
 from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip
 
 
-def trim_video(video_path, fps, skip_frame, time_interval, trim_folder):
+def trim_video(video_path, fps, skip_frame, time_interval, trim_folder, offset):
     """
     Saving the frames of the video from start_second to end_second
     The name of each frame is "originalname_framecount.jpg".
@@ -29,6 +29,8 @@ def trim_video(video_path, fps, skip_frame, time_interval, trim_folder):
         E.g: [[1, 3], [4, 6]]
     trim_folder : str
         Folder contains extracted frame
+    off_set: int
+        Offset for cut index
     """
 
     video_name = os.path.basename(video_path)
@@ -40,7 +42,7 @@ def trim_video(video_path, fps, skip_frame, time_interval, trim_folder):
     cut_idx = 0
 
     cut_path = os.path.join(trim_folder,
-                            "cut_{}".format(str(cut_idx).zfill(3)),
+                            "cut_{}".format(str(cut_idx+offset).zfill(6)),
                             "frames")
     os.makedirs(cut_path, exist_ok=True)
 
@@ -50,11 +52,11 @@ def trim_video(video_path, fps, skip_frame, time_interval, trim_folder):
 
         if start_frame <= count <= end_frame:
             if (count - start_frame) % skip_frame == 0:
-                frame_name = "{}_{}.jpg".format(str(cut_idx).zfill(3), count)
+                frame_name = "{}_{}.jpg".format(str(cut_idx+offset).zfill(6), count)
                 frame_path = os.path.join(cut_path, frame_name)
 
-                logging.info("Saving frame {}  of interval {} => {}".format(
-                    count, start_frame, end_frame))
+                logging.info("Saving frame {} in {}".format(
+                    count, video_path))
 
                 cv2.imwrite(frame_path, img)
 
@@ -64,7 +66,7 @@ def trim_video(video_path, fps, skip_frame, time_interval, trim_folder):
                 break
             # Make folder for new cut
             cut_path = os.path.join(trim_folder,
-                                    "cut_{}".format(str(cut_idx).zfill(3)),
+                                    "cut_{}".format(str(cut_idx+offset).zfill(6)),
                                     "frames")
             os.makedirs(cut_path, exist_ok=True)
 
@@ -78,7 +80,7 @@ def trim_video(video_path, fps, skip_frame, time_interval, trim_folder):
 
 
 def extract_video_with_timming_file(video_path, fps, skip_frame, timming_file,
-                                    trim_folder):
+                                    trim_folder, offset):
     """
     Read timming interval from a txt file and performing extracting from the video
 
@@ -101,6 +103,8 @@ def extract_video_with_timming_file(video_path, fps, skip_frame, timming_file,
         How many frames we want to skip between each extracted frame?
     timming_file: str
         The file contains timing intervals
+    off_set: int
+        Offset for cut index
     """
     with open(timming_file, "r") as f:
         n = int(f.readline())
@@ -111,14 +115,16 @@ def extract_video_with_timming_file(video_path, fps, skip_frame, timming_file,
             # Storing each extracted interval in a folder
             # extracted_folder = os.path.join(trim_folder, "{}_{}".format(start, end))
             # os.makedirs(extracted_folder, exist_ok=True)
-        trim_video(video_path, fps, skip_frame, time_interval, trim_folder)
+        trim_video(video_path, fps, skip_frame, time_interval, trim_folder,
+                   offset)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("video_path")
-    parser.add_argument("timming_file")
-    parser.add_argument("extracted_folder")
+    parser.add_argument("video_path", help="Path to video")
+    parser.add_argument("timming_file", help="Path to timming file")
+    parser.add_argument("extracted_folder", help="Folder storing cut")
+    parser.add_argument("offset", type=int,  help="Offset for cut index")
     parser.add_argument("-v", "--verbose", action="store_true")
     agrs = parser.parse_args()
     if agrs.verbose:
@@ -127,4 +133,4 @@ if __name__ == "__main__":
     os.makedirs(agrs.extracted_folder, exist_ok=True)
 
     extract_video_with_timming_file(agrs.video_path, 24, 6, agrs.timming_file,
-                                    agrs.extracted_folder)
+                                    agrs.extracted_folder, agrs.offset)
