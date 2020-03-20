@@ -9,7 +9,7 @@ class Colornet(nn.Module):
     def __init__(self):
         super(Colornet, self).__init__()
         use_bias = True
-        norm_layer = nn.BatchNorm2d
+        norm_layer = nn.InstanceNorm2d
 
         # Conv block 1
         conv_block_1 = [nn.Conv2d(6, 64, kernel_size=3, stride=1, padding=1, bias=use_bias), ]
