@@ -33,15 +33,16 @@ class Dataset(torch.utils.data.Dataset):
             Reference image of the cut
         '''
 
-        path = 'data/' + self.phase + '/' + str(index) + '/'
-        num_frames = len(glob.glob(path + 'frames/*'))
+        folder = 'data/' + self.phase + '/' + str(index) + '/'
+        paths = glob.glob(folder + 'frames/*')
+        paths.sort()
 
         frames = []
-        for i in range(num_frames):
-            img = cv2.imread(path + 'frames/' + str(index) + '_' + str(i) +'.jpg')
+        for path in paths:
+            img = cv2.imread(path)
             frames.append(cv2.cvtColor(img, cv2.COLOR_BGR2LAB))
         
-        ref = cv2.imread(path + 'ref/ref_' + str(index) + '.jpg')
+        ref = cv2.imread(folder + 'ref/ref_' + str(index) + '.jpg')
         ref = cv2.cvtColor(ref, cv2.COLOR_BGR2LAB)
 
         # Transform data to tensor

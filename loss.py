@@ -1,31 +1,66 @@
 import torch
 import torch.nn as nn
-from torchvision.models.vgg import vgg19_bn
+import torchvision.models as models
 import  torchvision.transforms as transforms
 
 PERCEPTUAL_LAMDA = 0.001
 CONTEXTUAL_LAMDA = 0.2
 SMOOTHNESS_LAMDA = 5.0
-ADVERSARIAL_LAMDA = 0.2
-FLOW_LOSS = 0.02
-L1_LOSS = 0.1
+FLOW_LAMBA = 0.02
+L1_LAMBA = 0.1
 
 class Loss(nn.Module):
     def __init__(self):
         super(Loss, self).__init__()
 
         # Extract vgg19 relu5_2 features
-        vgg = vgg19_bn(pretrained=True)
+        vgg = models.vgg19_bn(pretrained=True)
         vgg_feature = nn.Sequential(*list(vgg.features)[:45]).eval()
         for param in vgg_feature.parameters():
             param.requires_grad = False
         self.vgg_feature = vgg_feature
 
 
-    def forward(self, res, ground_truth, ref):
-        perceptual_loss = (self.vgg_feature(res) - self.vgg_feature(ground_truth)).norm()
+    def forward(self, res, last_res, ground_truth, ref):
+        '''
+        Parameters:
+        res: 
+            Result frame from model 
+        last_res: 
+            Last result frame from model
+        ground_truth:
+            The ground truth of frame
+        ref:
+            Reference image of the cut
+        '''
         
-        return PERCEPTUAL_LAMDA*perceptual_loss
+        perceptual = self.perceptual_loss(res, ground_truth)
+        contextual = self.contextual_loss(res, ref)
+        smoothness = self.smoothness_loss(res, ground_truth)
+        flow = self.flow_loss(res, last_res)
+        l1 = self.l1_loss(res, ground_truth)
+        
+        return PERCEPTUAL_LAMDA*perceptual + CONTEXTUAL_LAMDA*contextual + SMOOTHNESS_LAMDA*smoothness + FLOW_LAMBA*flow + L1_LAMBA*l1
+
+
+    def perceptual_loss(self, res, ground_truth):
+        return (self.vgg_feature(res) - self.vgg_feature(ground_truth)).norm()
+
+
+    def contextual_loss(self, res, ref):
+        return 0
+
+
+    def smoothness_loss(self, res, ground_truth):
+        return 0
+
+
+    def flow_loss(self, res, last_res):
+        return 0
+    
+    
+    def l1_loss(self, res, ground_truth):
+        return 0
 
 
 if __name__ == '__main__':

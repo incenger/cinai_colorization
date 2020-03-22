@@ -2,17 +2,44 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 import torch.nn.functional as F
+import sys
 
 TAU = 0.01
 
+class PadConvNorm(nn.Module):
+    def __init__(self, in_channel, out_channel, stride=1, tranpose=False):
+        super(PadConvNorm, self).__init__()
+
+        if tranpose:
+            self.pad = nn.Identity()
+            self.conv = nn.ConvTranspose2d(in_channel, out_channel, kernel_size=2, stride=2)
+        else:
+            self.pad = nn.ReflectionPad2d(1)
+            self.conv = nn.Conv2d(in_channel, out_channel, kernel_size=3, stride=stride)
+        self.norm = nn.InstanceNorm2d(out_channel)
+
+        self.out = nn.Sequential(
+            self.pad,
+            self.conv,
+            self.norm
+        )
+
+    def forward(self, x):
+        return self.out(x)
+
+
 class ResBlock(nn.Module):
     def __init__(self, in_channel, out_channel):
-        super().__init__()
+        super(ResBlock, self).__init__()
 
-        self.conv1 = nn.Conv2d(in_channel, out_channel, kernel_size=3)
-        self.in_norm1 = nn.InstanceNorm2d(out_channel)
-        self.conv2 = nn.Conv2d(out_channel, out_channel, kernel_size=3)
-        self.in_norm2 = nn.InstanceNorm2d(out_channel)
+        self.in_channels = in_channel
+        self.out_channels = out_channel
+
+        self.downchannel = PadConvNorm(in_channel, out_channel)
+        self.padconvnorm1 = PadConvNorm(in_channel, out_channel)
+        self.padconvnorm2 = PadConvNorm(out_channel, out_channel)
+
+        self.prelu = nn.PReLU()
 
 
     def forward(self, x):
@@ -22,51 +49,45 @@ class ResBlock(nn.Module):
             Image to further exploit features
         '''
 
-        residual = x
-        out = F.prelu(self.in_norm1(self.conv1(x)))
-        out = self.in_norm2(self.conv2(out))
+        residual = x if self.in_channels == self.out_channels else self.downchannel(x)
+        out = self.prelu(self.padconvnorm1(x))
+        out = self.padconvnorm2(out)
         out += residual
-        out = F.prelu(out)
+        out = self.prelu(out)
         return out
 
 
 class CorrespodenceNet(nn.Module):
     def __init__(self):
-        super().__init__()
+        super(CorrespodenceNet, self).__init__()
         
-        vgg19 = models.vgg19_bn()
-        #vgg19 = models.vgg19()
+        vgg19 = models.vgg19_bn(pretrained=True)
+        #vgg19 = models.vgg19(pretrained=true)
+        for param in vgg19.parameters():
+            param.requires_grad = False
 
         # Extract feature maps from VGG19 relu2_2, relu3_2, relu4_2, relu5_2
         self.vgg19_relu2_2 = nn.Sequential(
             vgg19.features[:12],  #vgg19:  8, vgg19_bn : 12
-            nn.Conv2d(128, 128, kernel_size=3),
-            nn.InstanceNorm2d(128),
-            nn.Conv2d(128, 256, kernel_size=3, stride=2),
-            nn.InstanceNorm2d(256)
+            PadConvNorm(128, 128),
+            PadConvNorm(128, 256, stride=2)
         )
         self.vgg19_relu3_2 = nn.Sequential(
             vgg19.features[:19],  #vgg19: 13, vgg19_bn : 19
-            nn.Conv2d(256, 128, kernel_size=3),
-            nn.InstanceNorm2d(128),
-            nn.Conv2d(256, 256, kernel_size=3),
-            nn.InstanceNorm2d(256)
+            PadConvNorm(256, 128),
+            PadConvNorm(128, 256)
         )
         self.vgg19_relu4_2 = nn.Sequential(
             vgg19.features[:32],  #vgg19: 22, vgg19_bn : 32
-            nn.Conv2d(512, 256, kernel_size=3),
-            nn.InstanceNorm2d(256),
-            nn.ConvTranspose2d(256, 256, kernel_size=3),
-            nn.InstanceNorm2d(256)
+            PadConvNorm(512, 256),
+            PadConvNorm(256, 256, tranpose=True)
         )
         self.vgg19_relu5_2 = nn.Sequential(
-            vgg19.features[:32],  #vgg19: 31, vgg19_bn : 45
-            nn.ConvTranspose2d(512, 256, kernel_size=3),
-            nn.InstanceNorm2d(256),
-            nn.ConvTranspose2d(256, 256, kernel_size=3),
-            nn.InstanceNorm2d(256)
+            vgg19.features[:45],  #vgg19: 31, vgg19_bn : 45
+            PadConvNorm(512, 256, tranpose=True),
+            PadConvNorm(256, 256, tranpose=True)
         )
-
+        
         # Several resblocks to further exploit features
         self.resblock1 = ResBlock(256*4, 256)
         self.resblock2 = ResBlock(256, 256)
@@ -79,46 +100,54 @@ class CorrespodenceNet(nn.Module):
 
         -----------
         Paramaeters:
-        cur_frame: Tensor of image with size [1, C, H, W]
+        cur_frame: Tensor of image with size [1, H, W] (L-channel of CIELAB image)
             Current frame in the cut
-        ref: Tensor of image with size [1, C, H, W]
+        ref: Tensor of image with size [3, H, W] (Lab-channel of CIELAB image)
             Reference image of the cut
 
         -----------
         Return:
-        W with size [HW]
-        S with size [HW]
+        W with size [2 x H x W]
+        S with size [H x W]
         '''
+
+        h, w = ref.size()[1], ref.size()[2]
         
         # Vector of extracted features
-        x_feature = self.feature(cur_frame)  # [HW x C]
-        y_feature = self.feature(ref)        # [HW x C]
+        x_feature = self.feature(cur_frame) # [HW x C]
+        y_feature = self.feature(ref[0].unsqueeze(0))    # [HW x C]
         # Normalize vector
+        x_feature -= x_feature.mean(dim=0)
         x_feature /= x_feature.norm(dim=0)  # [HW x C]
+        y_feature -= y_feature.mean(dim=0)
         y_feature /= y_feature.norm(dim=0)  # [HW x C]
 
         correlation_matrix = torch.mm(x_feature, y_feature.T)   # [HW x HW]
 
-        warped_color = self.softmax(correlation_matrix / TAU)           # [HW x HW]
-        warped_color = torch.mm(warped_color, y_feature.T).diagonal()   # [HW]
-        confidence_map = correlation_matrix.max(dim=1).values           # [HW]
+        warped_color = self.softmax(correlation_matrix / TAU)                # [HW x HW]
+        warped_color = torch.mm(warped_color, ref[1:].reshape((2, -1)).T)    # [HW x 2]
+        confidence_map = correlation_matrix.max(dim=1).values                # [HW]
 
-        return warped_color, confidence_map
+        return warped_color.T.reshape((2, h, w)), confidence_map.reshape((h, w))
 
 
-    def feature(self, x):
+    def feature(self, image):
         '''
         Derive features using VGG19 relu2_2, relu3_2, relu4_2, relu5_2 and several resblocks
 
         ----------
         Parameters:
-        x: Tensor of image with size [1, C, H, W]
+        image: Tensor of image with size [1, H, W] (L-channel of CIELAB image)
             Image to get features from
 
         ----------
         Return:
         Vector of features with size [HW x C]
         '''
+
+        x = torch.cat((image, image, image), 0)
+        x = x.unsqueeze(0)
+        print(x.size())
 
         # Get feature maps using VGG19 relu2_2, relu3_2, relu4_2, relu5_2
         relu2_2 = self.vgg19_relu2_2(x)
@@ -127,17 +156,12 @@ class CorrespodenceNet(nn.Module):
         relu5_2 = self.vgg19_relu5_2(x)
 
         feature = torch.cat((relu2_2, relu3_2, relu4_2, relu5_2), 1)
-
+        feature = nn.Upsample(scale_factor=4, mode='bicubic', align_corners=True)(feature)
+        
         # Feed features into several resblocks
         feature = self.resblock1(feature)
         feature = self.resblock2(feature)
         feature = self.resblock3(feature)
-
-        # Pad to keep the original size [1, C, H, W]
-        H, W = x.size()[2], x.size()[3]
-        H_sub, W_sub = feature.size()[2], feature.size()[3]
-        delta_H, delta_W = H - H_sub, W - W_sub
-        feature = nn.ReflectionPad2d((delta_W//2, delta_W - delta_W//2, delta_H//2, delta_H - delta_H//2))(feature)
 
         return feature.reshape((feature.size()[1], -1)).T
 
@@ -148,13 +172,38 @@ class CorrespodenceNet(nn.Module):
 
         ----------
         Parameters:
-        x: Tensor with size [H, W]
+        x: Tensor with size [N, H, W]
 
         ----------
         Return:
-        Tensor with size [H, W]
+        Tensor with size [N, H, W]
         '''
 
-        x_exp = (x - x.max(dims=0).values).exp()
-        delta = x_exp / x_exp.sum(dim=0)
+        x_exp = (x - x.max(dim=1).values).exp()
+        delta = x_exp / x_exp.sum(dim=1)
         return delta
+
+
+if __name__ == '__main__':
+    import cv2
+    import torchvision
+
+    # Load images
+    img1 = cv2.imread('data/train/0/frames/0_0.jpg')
+    img2 = cv2.imread('data/train/0/frames/0_1.jpg')
+    # Resize to 64 x 64
+    img1 = cv2.resize(img1, (64, 64))
+    img2 = cv2.resize(img2, (64, 64))
+    # Convert to CIELAB color space
+    img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2LAB)
+    img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2LAB)
+    # Convert to Cuda Tensor
+    img1 = torchvision.transforms.ToTensor()(img1).to('cuda')
+    img2 = torchvision.transforms.ToTensor()(img2).to('cuda')
+
+    img_l = img1[0].unsqueeze(0)
+
+    net = CorrespodenceNet().to('cuda')
+    W, S = net(img_l, img2)
+    img = torch.cat((img1, W), 0)
+    print(img.size())
