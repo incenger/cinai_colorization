@@ -1,6 +1,39 @@
 import torch
 import torch.nn as nn
 
+class ResBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, downsample=None):
+        super(ResBlock, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3,
+                               padding=1, bias=True)
+        self.insnom1 = nn.InstanceNorm2d(out_channels)
+        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3,
+                               padding=1, bias=True)
+        self.insnom2 = nn.InstanceNorm2d(out_channels)
+        self.conv3 = nn.Conv2d(out_channels, out_channels, kernel_size=3,
+                               padding=1, bias=True)
+        self.insnom3 = nn.InstanceNorm2d(out_channels)
+        self.relu = nn.ReLU(True)
+        self.downsample = downsample
+
+    def forward(self, x):
+        residual = x
+        out = self.conv1(x)
+        out = self.insnom1(out)
+        out = self.relu(out)
+        out = self.conv2(out)
+        out = self.insnom2(out)
+        out = self.relu(out)
+        out = self.conv3(out)
+        out = self.insnom3(out)
+        if self.downsample:
+            residual = self.downsample(residual)
+        out = self.relu(out + residual)
+        return out
+
+
+
+
 class Colornet(nn.Module):
     """
     Colorization Net
@@ -17,7 +50,7 @@ class Colornet(nn.Module):
         conv_block_1 += [nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1, bias=use_bias), ]
         conv_block_1 += [nn.ReLU(True), ]
         conv_block_1 += [norm_layer(64), ]
-        conv_block_1 += [nn.MaxPool2d(2, stride=1),]
+        downscale_1 = [nn.MaxPool2d(2, stride=2),]
 
 
         # Conv block 2
@@ -26,7 +59,7 @@ class Colornet(nn.Module):
         conv_block_2 += [nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1, bias=use_bias), ]
         conv_block_2 += [nn.ReLU(True), ]
         conv_block_2 += [norm_layer(128), ]
-        conv_block_2 += [nn.MaxPool2d(2, stride=1),]
+        downscale_2 = [nn.MaxPool2d(2, stride=2),]
 
         # Conv block 3
         conv_block_3 = [nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1, bias=use_bias), ]
@@ -36,38 +69,24 @@ class Colornet(nn.Module):
         conv_block_3 += [nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1, bias=use_bias), ]
         conv_block_3 += [nn.ReLU(True), ]
         conv_block_3 += [norm_layer(256), ]
-        conv_block_3 += [nn.MaxPool2d(2, stride=1),]
+        downscale_3 = [nn.MaxPool2d(2, stride=2),]
 
         # Resblock 1
-        # TODO: Add a downsample from 256 -> 512
-        # TODO: Adding before taking relu, might need to read resnet paper
-        # again
-        res_block_1 = [nn.Conv2d(256, 512, kernel_size=3, stride=1, padding=1, bias=use_bias), ]
-        res_block_1 += [nn.ReLU(True), ]
-        res_block_1 += [nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1, bias=use_bias), ]
-        res_block_1 += [nn.ReLU(True), ]
-        res_block_1 += [nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1, bias=use_bias), ]
-        res_block_1 += [nn.ReLU(True), ]
+        downsample = nn.Sequential(nn.Conv2d(256, 512, kernel_size=3, stride=1,
+                                             padding=1, bias=use_bias),
+                                   norm_layer(512))
+        res_block_1 = ResBlock(256, 512, downsample)
 
         # Resblock 2
-        res_block_2 = [nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1, bias=use_bias), ]
-        res_block_2 += [nn.ReLU(True), ]
-        res_block_2 += [nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1, bias=use_bias), ]
-        res_block_2 += [nn.ReLU(True), ]
-        res_block_2 += [nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1, bias=use_bias), ]
-        res_block_2 += [nn.ReLU(True), ]
+        res_block_2 = ResBlock(512, 512)
 
-        # Resblock 4
-        res_block_3 = [nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1, bias=use_bias), ]
-        res_block_3 += [nn.ReLU(True), ]
-        res_block_3 += [nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1, bias=use_bias), ]
-        res_block_3 += [nn.ReLU(True), ]
-        res_block_3 += [nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1, bias=use_bias), ]
-        res_block_3 += [nn.ReLU(True), ]
+        # Resblock 3
+        res_block_3 = ResBlock(512, 512)
 
         # Conv block 7
         upscale_7 = [nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2, padding = 1, bias = use_bias)]
         skip_3_7 = [nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1, bias=use_bias)]
+
         conv_block_7 = [nn.ReLU(True), ]
         conv_block_7 += [nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1, bias=use_bias), ]
         conv_block_7 += [nn.ReLU(True), ]
@@ -78,6 +97,7 @@ class Colornet(nn.Module):
         # Conv block 8
         upscale_8 = [nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding = 1, bias = use_bias)]
         skip_2_8 = [nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1, bias=use_bias)]
+
         conv_block_8 = [nn.ReLU(True), ]
         conv_block_8 += [nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1, bias=use_bias), ]
         conv_block_8 += [nn.ReLU(True), ]
@@ -86,6 +106,7 @@ class Colornet(nn.Module):
         # Conv block 9
         upscale_9 = [nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding = 1, bias = use_bias)]
         skip_1_9 = [nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1, bias=use_bias)]
+
         conv_block_9 = [nn.ReLU(True), ]
         conv_block_9 += [nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1, bias=use_bias), ]
         conv_block_9 += [nn.ReLU(True), ]
@@ -96,12 +117,15 @@ class Colornet(nn.Module):
         conv_final += [nn.Tanh()]
 
         self.conv_block_1 = nn.Sequential(*conv_block_1)
+        self.downscale_1 = nn.Sequential(*downscale_1)
         self.conv_block_2 = nn.Sequential(*conv_block_2)
+        self.downscale_2 = nn.Sequential(*downscale_2)
         self.conv_block_3 = nn.Sequential(*conv_block_3)
+        self.downscale_3 = nn.Sequential(*downscale_3)
 
-        self.res_block_1 = nn.Sequential(*res_block_1)
-        self.res_block_2 = nn.Sequential(*res_block_2)
-        self.res_block_3 = nn.Sequential(*res_block_3)
+        self.res_block_1 = res_block_1
+        self.res_block_2 = res_block_2
+        self.res_block_3 = res_block_3
 
         self.upscale_7 = nn.Sequential(*upscale_7)
         self.skip_3_7 = nn.Sequential(*skip_3_7)
@@ -142,25 +166,25 @@ class Colornet(nn.Module):
 
         # Downscale convolution bloc
         conv1 = self.conv_block_1(input_stacked)
-        conv2 = self.conv_block_2(conv1)
-        conv3 = self.conv_block_3(conv2)
+        conv2 = self.conv_block_2(self.downscale_1(conv1))
+        conv3 = self.conv_block_3(self.downscale_2(conv2))
 
         # Residual block
-        res1 = self.res_block_1(conv3) + conv3
-        res2 = self.res_block_2(res1) + res1
-        res3 = self.res_block_3(res2) + res2
+        res1 = self.res_block_1(self.downscale_3(conv3))
+        res2 = self.res_block_2(res1)
+        res3 = self.res_block_3(res2)
 
         # Upscale conv blocks
-        cov7_up = self.upscale_7(res3) + self.skip_1_7(conv3)
-        cov7 = self.conv_block_7(cov7_up)
+        conv7_up = self.upscale_7(res3) + self.skip_3_7(conv3)
+        conv7 = self.conv_block_7(conv7_up)
 
-        cov8_up = self.upscale_8(cov7) + self.skip_2_8(conv2)
-        cov8 = self.conv_block_8(cov8_up)
+        covn8_up = self.upscale_8(conv7) + self.skip_2_8(conv2)
+        conv8 = self.conv_block_8(covn8_up)
 
-        cov9_up = self.upscale_7(cov8) + self.skip_1_7(conv1)
-        cov9 = self.conv_block_7(cov9_up)
+        conv9_up = self.upscale_9(conv8) + self.skip_1_9(conv1)
+        conv9 = self.conv_block_9(conv9_up)
 
-        output = self.conv_final(cov9)
+        output = self.conv_final(conv9)
 
         return output
 
