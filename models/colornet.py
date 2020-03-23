@@ -45,7 +45,7 @@ class Colornet(nn.Module):
         norm_layer = nn.InstanceNorm2d
 
         # Conv block 1
-        conv_block_1 = [nn.Conv2d(5, 64, kernel_size=3, stride=1, padding=1, bias=use_bias), ]
+        conv_block_1 = [nn.Conv2d(6, 64, kernel_size=3, stride=1, padding=1, bias=use_bias), ]
         conv_block_1 += [nn.ReLU(True), ]
         conv_block_1 += [nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1, bias=use_bias), ]
         conv_block_1 += [nn.ReLU(True), ]
