@@ -117,10 +117,10 @@ class CorrespodenceNet(nn.Module):
         x_feature = self.feature(cur_frame) # [HW x C]
         y_feature = self.feature(ref[0].unsqueeze(0))    # [HW x C]
         # Normalize vector
-        x_feature -= x_feature.mean(dim=0)
-        x_feature /= x_feature.norm(dim=0)  # [HW x C]
-        y_feature -= y_feature.mean(dim=0)
-        y_feature /= y_feature.norm(dim=0)  # [HW x C]
+        x_feature -= x_feature.mean(dim=0, keepdim=True)
+        x_feature /= x_feature.norm(dim=0, keepdim=True)  # [HW x C]
+        y_feature -= y_feature.mean(dim=0, keepdim=True)
+        y_feature /= y_feature.norm(dim=0, keepdim=True)  # [HW x C]
 
         correlation_matrix = torch.mm(x_feature, y_feature.T)   # [HW x HW]
 
@@ -171,15 +171,15 @@ class CorrespodenceNet(nn.Module):
 
         ----------
         Parameters:
-        x: Tensor with size [N, H, W]
+        x: Tensor with size [H, W]
 
         ----------
         Return:
-        Tensor with size [N, H, W]
+        Tensor with size [H, W]
         '''
 
-        x_exp = (x - x.max(dim=1).values).exp()
-        delta = x_exp / x_exp.sum(dim=1)
+        x_exp = (x - x.max(dim=1, keepdim=True).values).exp()
+        delta = x_exp / x_exp.sum(dim=1, keepdim=True)
         return delta
 
 
