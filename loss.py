@@ -60,7 +60,8 @@ class Loss(nn.Module):
     
     
     def l1_loss(self, res, ground_truth):
-        return 0
+        loss_fn = nn.L1Loss(reduction="sum")
+        return loss_fn(res, ground_truth)
 
 
 if __name__ == '__main__':
