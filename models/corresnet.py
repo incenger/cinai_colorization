@@ -26,9 +26,9 @@ class PadConvNorm(nn.Module):
         return self.out(x)
 
 
-class ResBlockCorres(nn.Module):
+class ResBlockCorresnet(nn.Module):
     def __init__(self, in_channel, out_channel):
-        super(ResBlock, self).__init__()
+        super(ResBlockCorresnet, self).__init__()
 
         self.in_channels = in_channel
         self.out_channels = out_channel
@@ -68,28 +68,36 @@ class CorrespodenceNet(nn.Module):
         self.vgg19_relu2_2 = nn.Sequential(
             vgg19.features[:12],  #vgg19:  8, vgg19_bn : 12
             PadConvNorm(128, 128),
-            PadConvNorm(128, 256, stride=2)
+            nn.ReLU(True),
+            PadConvNorm(128, 256, stride=2),
+            nn.ReLU(True),
         )
         self.vgg19_relu3_2 = nn.Sequential(
             vgg19.features[:19],  #vgg19: 13, vgg19_bn : 19
             PadConvNorm(256, 128),
-            PadConvNorm(128, 256)
+            nn.ReLU(True),
+            PadConvNorm(128, 256),
+            nn.ReLU(True),
         )
         self.vgg19_relu4_2 = nn.Sequential(
             vgg19.features[:32],  #vgg19: 22, vgg19_bn : 32
             PadConvNorm(512, 256),
-            PadConvNorm(256, 256, tranpose=True)
+            nn.ReLU(True),
+            PadConvNorm(256, 256, tranpose=True),
+            nn.ReLU(True),
         )
         self.vgg19_relu5_2 = nn.Sequential(
             vgg19.features[:45],  #vgg19: 31, vgg19_bn : 45
             PadConvNorm(512, 256, tranpose=True),
-            PadConvNorm(256, 256, tranpose=True)
+            nn.ReLU(True),
+            PadConvNorm(256, 256, tranpose=True),
+            nn.ReLU(True),
         )
         
         # Several resblocks to further exploit features
-        self.resblock1 = ResBlockCorres(256*4, 256)
-        self.resblock2 = ResBlockCorres(256, 256)
-        self.resblock3 = ResBlockCorres(256, 256)
+        self.resblock1 = ResBlockCorresnet(256*4, 256)
+        self.resblock2 = ResBlockCorresnet(256, 256)
+        self.resblock3 = ResBlockCorresnet(256, 256)
 
 
     def forward(self, cur_frame, ref):
