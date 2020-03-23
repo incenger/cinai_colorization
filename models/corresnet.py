@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
 import torchvision.models as models
-import torch.nn.functional as F
-import sys
 
 TAU = 0.01
 
@@ -28,7 +26,7 @@ class PadConvNorm(nn.Module):
         return self.out(x)
 
 
-class ResBlock(nn.Module):
+class ResBlockCorres(nn.Module):
     def __init__(self, in_channel, out_channel):
         super(ResBlock, self).__init__()
 
@@ -46,7 +44,7 @@ class ResBlock(nn.Module):
         '''
         Parameters:
         x: Tensor of image [N, in_channel, H, W]
-            Image to further exploit features
+            Image to further exploit features.
         '''
 
         residual = x if self.in_channels == self.out_channels else self.downchannel(x)
@@ -89,63 +87,63 @@ class CorrespodenceNet(nn.Module):
         )
         
         # Several resblocks to further exploit features
-        self.resblock1 = ResBlock(256*4, 256)
-        self.resblock2 = ResBlock(256, 256)
-        self.resblock3 = ResBlock(256, 256)
+        self.resblock1 = ResBlockCorres(256*4, 256)
+        self.resblock2 = ResBlockCorres(256, 256)
+        self.resblock3 = ResBlockCorres(256, 256)
 
 
     def forward(self, cur_frame, ref):
         '''
-        Compute warped color W and confidence map S between cur_frame and ref
+        Compute warped color W and confidence map S between cur_frame and ref.
 
         -----------
         Paramaeters:
-        cur_frame: Tensor of image with size [1, H, W] (L-channel of CIELAB image)
-            Current frame in the cut
-        ref: Tensor of image with size [3, H, W] (Lab-channel of CIELAB image)
-            Reference image of the cut
+        cur_frame: Tensor of image with size [H, W]
+            Current frame (L-channel in CIELAB color space) in the cut.
+        ref: Tensor of image with size [3, H, W]
+            Reference image (Lab-channel in CIELAB color space) of the cut.
 
         -----------
         Return:
-        W with size [2 x H x W]
-        S with size [H x W]
+        W with size [2, H, W] (ab-channel in CIELAB colo space)
+        S with size [1, H, W]
         '''
 
         h, w = ref.size()[1], ref.size()[2]
         
         # Vector of extracted features
-        x_feature = self.feature(cur_frame) # [HW x C]
-        y_feature = self.feature(ref[0].unsqueeze(0))    # [HW x C]
+        x_feature = self.feature(cur_frame) # [HW, C]
+        y_feature = self.feature(ref[0])    # [HW, C]
         # Normalize vector
         x_feature -= x_feature.mean(dim=0, keepdim=True)
-        x_feature /= x_feature.norm(dim=0, keepdim=True)  # [HW x C]
+        x_feature /= x_feature.norm(dim=0, keepdim=True)  # [HW, C]
         y_feature -= y_feature.mean(dim=0, keepdim=True)
-        y_feature /= y_feature.norm(dim=0, keepdim=True)  # [HW x C]
+        y_feature /= y_feature.norm(dim=0, keepdim=True)  # [HW, C]
 
-        correlation_matrix = torch.mm(x_feature, y_feature.T)   # [HW x HW]
+        correlation_matrix = torch.mm(x_feature, y_feature.T)   # [HW, HW]
 
-        warped_color = self.softmax(correlation_matrix / TAU)                # [HW x HW]
-        warped_color = torch.mm(warped_color, ref[1:].reshape((2, -1)).T)    # [HW x 2]
+        warped_color = self.softmax(correlation_matrix / TAU)                # [HW, HW]
+        warped_color = torch.mm(warped_color, ref[1:].reshape((2, -1)).T)    # [HW, 2]
         confidence_map = correlation_matrix.max(dim=1).values                # [HW]
 
-        return warped_color.T.reshape((2, h, w)), confidence_map.reshape((h, w))
+        return warped_color.T.reshape((2, h, w)), confidence_map.reshape((1, h, w))
 
 
     def feature(self, image):
         '''
-        Derive features using VGG19 relu2_2, relu3_2, relu4_2, relu5_2 and several resblocks
+        Derive features using VGG19 relu2_2, relu3_2, relu4_2, relu5_2 and several resblocks.
 
         ----------
         Parameters:
-        image: Tensor of image with size [1, H, W] (L-channel of CIELAB image)
-            Image to get features from
+        image: Tensor of image with size [H, W]
+            Image (L-channel in CIELAB color space) to get features from.
 
         ----------
         Return:
-        Vector of features with size [HW x C]
+        Vector of features with size [HW, C]
         '''
 
-        x = torch.cat((image, image, image), 0)
+        x = torch.stack((image, image, image), 0)
         x = x.unsqueeze(0)
 
         # Get feature maps using VGG19 relu2_2, relu3_2, relu4_2, relu5_2
@@ -167,7 +165,7 @@ class CorrespodenceNet(nn.Module):
     
     def softmax(self, x):
         '''
-        Compute stable softmax over rows of x
+        Compute stable softmax over rows of x.
 
         ----------
         Parameters:
@@ -202,12 +200,12 @@ if __name__ == '__main__':
     img1 = torchvision.transforms.ToTensor()(img1)#.to('cuda')
     img2 = torchvision.transforms.ToTensor()(img2)#.to('cuda')
 
-    img_l = img1[0].unsqueeze(0)
+    img_l = img1[0]
 
     # Get the result
     net = CorrespodenceNet()#.to('cuda')
     W, S = net(img_l, img2)
-    img = torch.cat((img_l, W), 0).permute(1, 2, 0)
+    img = torch.cat((img_l.unsqueeze(0), W), 0).permute(1, 2, 0)
     # Convert back to BGR image for visualizing
     img = 255*img.detach().numpy()
     img = img.astype(np.uint8)  # OpenCV supports uint8 for integer values

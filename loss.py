@@ -24,14 +24,14 @@ class Loss(nn.Module):
     def forward(self, res, last_res, ground_truth, ref):
         '''
         Parameters:
-        res: 
-            Result frame from model 
-        last_res: 
-            Last result frame from model
-        ground_truth:
-            The ground truth of frame
-        ref:
-            Reference image of the cut
+        res: Tensor of image with size [3, H, W]
+            Result frame in CIELAB color space from model .
+        last_res: Tensor of image with size [3, H, W]
+            Last result frame in CIELAB color space from model.
+        ground_truth: Tensor of image with size [3, H, W]
+            The ground truth in CIELAB color space of frame.
+        ref: Tensor of image with size [3, H, W]
+            Reference image in CIELAB color space of the cut.
         '''
         
         perceptual = self.perceptual_loss(res, ground_truth)
@@ -44,7 +44,9 @@ class Loss(nn.Module):
 
 
     def perceptual_loss(self, res, ground_truth):
-        return (self.vgg_feature(res) - self.vgg_feature(ground_truth)).norm()
+        _res = res.unsqueeze(0)
+        _ground_truth = ground_truth.unsqueeze(0)
+        return (self.vgg_feature(_res) - self.vgg_feature(_ground_truth)).norm()
 
 
     def contextual_loss(self, res, ref):
@@ -66,13 +68,20 @@ class Loss(nn.Module):
 if __name__ == '__main__':
     import cv2
 
-    img1 = cv2.imread('data/train/0/frames/0_0.jpg', cv2.IMREAD_UNCHANGED)
-    img2 = cv2.imread('data/train/0/frames/0_1.jpg', cv2.IMREAD_UNCHANGED)
+    # Load images
+    img1 = cv2.imread('data/train/0/frames/0_0.jpg')
+    img2 = cv2.imread('data/train/0/frames/0_1.jpg')
+    # Resize to 480 x 272
+    img1 = cv2.resize(img1, (480, 272))
+    img2 = cv2.resize(img2, (480, 272))
+    # Convert to CIELAB color space
+    img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2LAB)
+    img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2LAB)
     
     # Convert to tensor with size [1, C, H, W] from [H, W, C]
-    img1 = transforms.ToTensor()(img1).unsqueeze(0)
-    img2 = transforms.ToTensor()(img2).unsqueeze(0)
+    img1 = transforms.ToTensor()(img1)
+    img2 = transforms.ToTensor()(img2)
     #print(img1.size())
 
     loss = Loss()
-    print(loss(img1, img2, img2))
+    print(loss(img1, img2, img2, img1))
