@@ -147,7 +147,6 @@ class CorrespodenceNet(nn.Module):
 
         x = torch.cat((image, image, image), 0)
         x = x.unsqueeze(0)
-        print(x.size())
 
         # Get feature maps using VGG19 relu2_2, relu3_2, relu4_2, relu5_2
         relu2_2 = self.vgg19_relu2_2(x)
@@ -187,6 +186,7 @@ class CorrespodenceNet(nn.Module):
 if __name__ == '__main__':
     import cv2
     import torchvision
+    import numpy as np
 
     # Load images
     img1 = cv2.imread('data/train/0/frames/0_0.jpg')
@@ -197,13 +197,22 @@ if __name__ == '__main__':
     # Convert to CIELAB color space
     img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2LAB)
     img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2LAB)
+    
     # Convert to Cuda Tensor
-    img1 = torchvision.transforms.ToTensor()(img1).to('cuda')
-    img2 = torchvision.transforms.ToTensor()(img2).to('cuda')
+    img1 = torchvision.transforms.ToTensor()(img1)#.to('cuda')
+    img2 = torchvision.transforms.ToTensor()(img2)#.to('cuda')
 
     img_l = img1[0].unsqueeze(0)
 
-    net = CorrespodenceNet().to('cuda')
+    # Get the result
+    net = CorrespodenceNet()#.to('cuda')
     W, S = net(img_l, img2)
-    img = torch.cat((img1, W), 0)
-    print(img.size())
+    img = torch.cat((img_l, W), 0).permute(1, 2, 0)
+    # Convert back to BGR image for visualizing
+    img = 255*img.detach().numpy()
+    img = img.astype(np.uint8)  # OpenCV supports uint8 for integer values
+    img = cv2.cvtColor(img, cv2.COLOR_LAB2BGR)
+    
+    # Visualize
+    cv2.imshow('abc', img)
+    cv2.waitKey(0)
