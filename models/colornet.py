@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 
-class ResBlock(nn.Module):
+class ResBlockColornet(nn.Module):
     def __init__(self, in_channels, out_channels, downsample=None):
-        super(ResBlock, self).__init__()
+        super(ResBlockColornet, self).__init__()
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3,
                                padding=1, bias=True)
         self.insnom1 = nn.InstanceNorm2d(out_channels)
@@ -75,13 +75,13 @@ class Colornet(nn.Module):
         downsample = nn.Sequential(nn.Conv2d(256, 512, kernel_size=3, stride=1,
                                              padding=1, bias=use_bias),
                                    norm_layer(512))
-        res_block_1 = ResBlock(256, 512, downsample)
+        res_block_1 = ResBlockColornet(256, 512, downsample)
 
         # Resblock 2
-        res_block_2 = ResBlock(512, 512)
+        res_block_2 = ResBlockColornet(512, 512)
 
         # Resblock 3
-        res_block_3 = ResBlock(512, 512)
+        res_block_3 = ResBlockColornet(512, 512)
 
         # Conv block 7
         upscale_7 = [nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2, padding = 1, bias = use_bias)]
