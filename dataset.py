@@ -5,13 +5,13 @@ import numpy as np
 import random
 
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, size=(64, 64), phase='train', transforms=None):
+    def __init__(self, path, size=(64, 64), transforms=None):
         '''
         Parameters:
         size: tuple of 2 unsigned integers
             New size of image.
-        phase: str
-            Phase to use data, can be either 'train' and 'test'.
+        path: str
+            Path to data folder.
         transforms: list of Transform object
             Transforms to be applied on a sample.
         '''
@@ -19,9 +19,8 @@ class Dataset(torch.utils.data.Dataset):
         super(Dataset, self).__init__()
 
         self.size = size
-        self.phase = phase
         self.transforms = transforms
-        self.folders = glob.glob('data/' + self.phase + '/*')
+        self.folders = glob.glob(path + '/*')
         self.folders.sort()
 
 
@@ -37,7 +36,7 @@ class Dataset(torch.utils.data.Dataset):
                 L-channel in CIELAB color space of frames in the cut.
             'Lab': Sequence of Tensors of image [N, 3, H, W]
                 Lab-channel in CIELAB color space of frames in the cut.
-            'ref': Tensor of image [3, H, W]
+            'ref': Tensor of image [1, 3, H, W]
                 Lab-channel in CIELAB color space of reference image of the cut.
         '''
 
@@ -54,11 +53,11 @@ class Dataset(torch.utils.data.Dataset):
             img = self.image(path, self.size, self.transforms, seed, color_mode=cv2.COLOR_BGR2LAB)
 
             if idx == 0:
-                L = img[0].unsqueeze(0).unsqueeze(0)
-                Lab = img.unsqueeze(0)
+                L = img[:, 0].unsqueeze(0)
+                Lab = img
             else:
-                L = torch.cat((L, img[0].unsqueeze(0).unsqueeze(0)), 0)
-                Lab = torch.cat((Lab, img.unsqueeze(0)), 0)
+                L = torch.cat((L, img[:, 0].unsqueeze(0)), 0)
+                Lab = torch.cat((Lab, img), 0)
         
         ref = self.image(path_ref, self.size, self.transforms, seed, color_mode=cv2.COLOR_BGR2LAB)
 
@@ -84,7 +83,7 @@ class Dataset(torch.utils.data.Dataset):
 
         ----------
         Return:
-        Tensor of image with size [3, H, W]
+        Tensor of image with size [1, 3, H, W]
         '''
 
         img = cv2.imread(path)
@@ -100,9 +99,9 @@ class Dataset(torch.utils.data.Dataset):
             random.seed(seed)
             img = transforms(img)
         else:
-            img = torch.from_numpy(img).permute(1, 2, 0)
+            img = torch.from_numpy(img).permute(2, 0, 1)
 
-        return img
+        return img.unsqueeze(0)
 
 
 if __name__ == '__main__':

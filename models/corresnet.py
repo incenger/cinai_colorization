@@ -106,35 +106,35 @@ class CorrespodenceNet(nn.Module):
 
         -----------
         Paramaeters:
-        cur_frame: Tensor of image with size [H, W]
+        cur_frame: Tensor of image with size [1, 1, H, W]
             Current frame (L-channel in CIELAB color space) in the cut.
-        ref: Tensor of image with size [3, H, W]
+        ref: Tensor of image with size [1, 3, H, W]
             Reference image (Lab-channel in CIELAB color space) of the cut.
 
         -----------
         Return:
-        W with size [2, H, W] (ab-channel in CIELAB colo space)
-        S with size [1, H, W]
+        W with size [1, 2, H, W] (ab-channel in CIELAB colo space)
+        S with size [1, 1, H, W]
         '''
 
-        h, w = ref.size()[1], ref.size()[2]
+        h, w = ref.size()[2], ref.size()[3]
         
         # Vector of extracted features
         x_feature = self.feature(cur_frame) # [HW, C]
-        y_feature = self.feature(ref[0])    # [HW, C]
+        y_feature = self.feature(ref[:, :1]) # [HW, C]
         # Normalize vector
-        x_feature -= x_feature.mean(dim=0, keepdim=True)
-        x_feature /= x_feature.norm(dim=0, keepdim=True)  # [HW, C]
-        y_feature -= y_feature.mean(dim=0, keepdim=True)
-        y_feature /= y_feature.norm(dim=0, keepdim=True)  # [HW, C]
+        x_feature -= x_feature.clone().mean(dim=0, keepdim=True)
+        x_feature /= x_feature.clone().norm(dim=0, keepdim=True)  # [HW, C]
+        y_feature -= y_feature.clone().mean(dim=0, keepdim=True)
+        y_feature /= y_feature.clone().norm(dim=0, keepdim=True)  # [HW, C]
 
         correlation_matrix = torch.mm(x_feature, y_feature.T)   # [HW, HW]
 
         warped_color = self.softmax(correlation_matrix / TAU)                # [HW, HW]
-        warped_color = torch.mm(warped_color, ref[1:].reshape((2, -1)).T)    # [HW, 2]
+        warped_color = torch.mm(warped_color, ref[0, 1:].reshape((2, -1)).T)    # [HW, 2]
         confidence_map = correlation_matrix.max(dim=1).values                # [HW]
 
-        return warped_color.T.reshape((2, h, w)), confidence_map.reshape((1, h, w))
+        return warped_color.T.reshape((1, 2, h, w)), confidence_map.reshape((1, 1, h, w))
 
 
     def feature(self, image):
@@ -143,7 +143,7 @@ class CorrespodenceNet(nn.Module):
 
         ----------
         Parameters:
-        image: Tensor of image with size [H, W]
+        image: Tensor of image with size [1, 1, H, W]
             Image (L-channel in CIELAB color space) to get features from.
 
         ----------
@@ -151,8 +151,7 @@ class CorrespodenceNet(nn.Module):
         Vector of features with size [HW, C]
         '''
 
-        x = torch.stack((image, image, image), 0)
-        x = x.unsqueeze(0)
+        x = torch.cat((image, image, image), 1)
 
         # Get feature maps using VGG19 relu2_2, relu3_2, relu4_2, relu5_2
         relu2_2 = self.vgg19_relu2_2(x)

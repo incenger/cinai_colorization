@@ -21,39 +21,38 @@ class Loss(nn.Module):
         self.vgg_feature = vgg_feature
 
 
-    def forward(self, res, last_res, ground_truth, ref):
+
+    def forward(self, res, last_res, gt, ref):
         '''
         Parameters:
-        res: Tensor of image with size [3, H, W]
+        res: Tensor of image with size [1, 3, H, W]
             Result frame in CIELAB color space from model .
-        last_res: Tensor of image with size [3, H, W]
+        last_res: Tensor of image with size [1, 3, H, W]
             Last result frame in CIELAB color space from model.
-        ground_truth: Tensor of image with size [3, H, W]
+        gt: Tensor of image with size [1, 3, H, W]
             The ground truth in CIELAB color space of frame.
-        ref: Tensor of image with size [3, H, W]
+        ref: Tensor of image with size [1, 3, H, W]
             Reference image in CIELAB color space of the cut.
         '''
         
-        perceptual = self.perceptual_loss(res, ground_truth)
+        perceptual = self.perceptual_loss(res, gt)
         contextual = self.contextual_loss(res, ref)
-        smoothness = self.smoothness_loss(res, ground_truth)
+        smoothness = self.smoothness_loss(res, gt)
         flow = self.flow_loss(res, last_res)
-        l1 = self.l1_loss(res, ground_truth)
+        l1 = self.l1_loss(res, gt)
         
         return PERCEPTUAL_LAMDA*perceptual + CONTEXTUAL_LAMDA*contextual + SMOOTHNESS_LAMDA*smoothness + FLOW_LAMBA*flow + L1_LAMBA*l1
 
 
-    def perceptual_loss(self, res, ground_truth):
-        _res = res.unsqueeze(0)
-        _ground_truth = ground_truth.unsqueeze(0)
-        return (self.vgg_feature(_res) - self.vgg_feature(_ground_truth)).norm()
+    def perceptual_loss(self, res, gt):
+        return (self.vgg_feature(res) - self.vgg_feature(gt)).norm()
 
 
     def contextual_loss(self, res, ref):
         return 0
 
 
-    def smoothness_loss(self, res, ground_truth):
+    def smoothness_loss(self, res, gt):
         return 0
 
 
@@ -61,11 +60,11 @@ class Loss(nn.Module):
         return 0
     
     
-    def l1_loss(self, res, ground_truth):
-        _res = res[1:]
-        _ground_truth = ground_truth[1:]
+    def l1_loss(self, res, gt):
+        _res = res[:, 1:]
+        _gt = gt[:, 1:]
         loss_fn = nn.L1Loss(reduction="sum")
-        return loss_fn(_res, _ground_truth)
+        return loss_fn(_res, _gt)
 
 
 if __name__ == '__main__':
