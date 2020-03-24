@@ -162,7 +162,7 @@ class Colornet(nn.Module):
         # Stacking four inputs into 6 channels
 
         # [N, C, H, W]
-        input_stacked = torch.stack((frame_cur, frame_prev, Wab, S), 0)
+        input_stacked = torch.cat((frame_cur, frame_prev, Wab, S), 0).unsqueeze(0)
 
         # Downscale convolution bloc
         conv1 = self.conv_block_1(input_stacked)
