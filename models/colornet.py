@@ -170,21 +170,21 @@ class Colornet(nn.Module):
         conv3 = self.conv_block_3(self.downscale_2(conv2))
 
         # Residual block
-        res1 = self.res_block_1(self.downscale_3(conv3))
-        res2 = self.res_block_2(res1)
-        res3 = self.res_block_3(res2)
+        res = self.res_block_1(self.downscale_3(conv3))
+        res = self.res_block_2(res)
+        res = self.res_block_3(res)
 
         # Upscale conv blocks
-        conv7_up = self.upscale_7(res3) + self.skip_3_7(conv3)
-        conv7 = self.conv_block_7(conv7_up)
+        conv_up = self.upscale_7(res) + self.skip_3_7(conv3)
+        conv_up = self.conv_block_7(conv_up)
 
-        covn8_up = self.upscale_8(conv7) + self.skip_2_8(conv2)
-        conv8 = self.conv_block_8(covn8_up)
+        covn_up = self.upscale_8(conv_up) + self.skip_2_8(conv2)
+        conv_up = self.conv_block_8(covn_up)
 
-        conv9_up = self.upscale_9(conv8) + self.skip_1_9(conv1)
-        conv9 = self.conv_block_9(conv9_up)
+        conv_up = self.upscale_9(conv_up) + self.skip_1_9(conv1)
+        conv_up = self.conv_block_9(conv_up)
 
-        output = self.conv_final(conv9)
+        output = self.conv_final(conv_up)
 
         return output
 
