@@ -39,6 +39,9 @@ def train(models, epochs, dataloader, optimizer, loss_fn):
         if torch.cuda.is_available():
             model.cuda()
 
+    if torch.cuda.is_available():
+        loss_fn.cuda()
+
     # Training
     for epoch in range(epochs):
         print('Epoch ', epoch)
@@ -55,7 +58,7 @@ def train(models, epochs, dataloader, optimizer, loss_fn):
             ref = cut['ref'][0]  # [1, 3, H, W]
 
             if torch.cuda.is_available():
-                ref.cuda()
+                ref = ref.cuda()
 
             frameloader = DataLoader(frames, batch_size=1)
             gtloader = DataLoader(gt, batch_size=1)
@@ -67,8 +70,8 @@ def train(models, epochs, dataloader, optimizer, loss_fn):
             # Iterate over frames in one cut
             for frame, gt in zip(frameloader, gtloader):
                 if torch.cuda.is_available():
-                    frame.cuda()
-                    gt.cuda()
+                    frame = frame.cuda()
+                    gt = gt.cuda()
 
                 W_ab, S = models['corres'](frame, ref)
 
