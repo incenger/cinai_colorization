@@ -2,7 +2,7 @@ from models.colornet import Colornet
 from models.corresnet import CorrespodenceNet
 import torch
 
-def test(models, frames, ref):
+def test(nets, frames, ref):
     """
     Tranin the models
 
@@ -22,7 +22,7 @@ def test(models, frames, ref):
 
     # Setting models to evaluate mode
 
-    for model in models.values():
+    for model in nets.values():
         model.eval()
         if torch.cuda.is_available():
             model.cuda()
@@ -39,9 +39,9 @@ def test(models, frames, ref):
         # Iterate over frames in one cut
         for i in range(len(frames)):
 
-            W_ab, S = models['cores'](frames[i], ref)
+            W_ab, S = nets['cores'](frames[i], ref)
 
-            pred_ab = models['color'](prev_ab, frames[i], W_ab, S)
+            pred_ab = nets['color'](prev_ab, frames[i], W_ab, S)
 
             preds_ab.apppend(pred_ab)
 
