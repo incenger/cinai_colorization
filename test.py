@@ -8,13 +8,13 @@ import cv2
 import glob
 import numpy as np
 
-def test(models, frames, ref):
+def test(nets, frames, ref):
     """
     Tranin the models
 
     Paramters
     ---------
-    models: dictionary
+    nets: dictionary
         The dictionary contains correspondence subnet and colorization subnet
     frames: tensor
         Frames to color
@@ -29,13 +29,13 @@ def test(models, frames, ref):
 
     # Setting models to evaluate mode
     names = ['corresnet.pth', 'colornet.pth']
-    for name, model in zip(names, models.values()):
-        model.eval()
+    for name, net in zip(names, nets.values()):
+        net.eval()
         if torch.cuda.is_available():
-            model.cuda()
-            model.load_state_dict(torch.load('checkpoints/' + name))
+            net.cuda()
+            net.load_state_dict(torch.load('checkpoints/' + name))
         else:
-            model.load_state_dict(torch.load('checkpoints/' + name, map_location=lambda storage, loc: storage))
+            net.load_state_dict(torch.load('checkpoints/' + name, map_location=lambda storage, loc: storage))
 
     if torch.cuda.is_available():
         ref = ref.cuda()
@@ -53,9 +53,9 @@ def test(models, frames, ref):
             if torch.cuda.is_available():
                 frame = frame.cuda()
 
-            W_ab, S = models['corres'](frame, ref)
+            W_ab, S = nets['corres'](frame, ref)
 
-            pred = models['color'](ref[:, 1:], frame, W_ab, S)
+            pred = nets['color'](ref[:, 1:], frame, W_ab, S)
             prev = pred
             
             preds.append(pred[0])
@@ -93,8 +93,8 @@ if __name__ == '__main__':
     ref = load_image(path_ref[0], color_mode=cv2.COLOR_BGR2LAB)
     
     # Prepare model
-    models = {'corres': CorrespodenceNet(), 'color': Colornet()}
-    res = test(models, frames, ref)
+    nets = {'corres': CorrespodenceNet(), 'color': Colornet()}
+    res = test(nets, frames, ref)
 
     if not os.path.isdir(path + '/res'):
         os.mkdir(path + '/res')

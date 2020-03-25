@@ -11,13 +11,13 @@ import os
 
 EPOCHS = 10
 
-def train(models, epochs, dataloader, optimizer, loss_fn):
+def train(nets, epochs, dataloader, optimizer, loss_fn):
     """
-    Tranin the models
+    Train the models
 
     Paramters
     ---------
-    models: dictionary
+    nets: dictionary
         The dictionary contains correspondence subnet and colorization subnet
     epochs: int
         Number of epochs to train
@@ -38,10 +38,10 @@ def train(models, epochs, dataloader, optimizer, loss_fn):
 
     # Setting models to train mode
 
-    for model in models.values():
-        model.train()
+    for net in nets.values():
+        net.train()
         if torch.cuda.is_available():
-            model.cuda()
+            net.cuda()
 
     if torch.cuda.is_available():
         loss_fn.cuda()
@@ -78,9 +78,9 @@ def train(models, epochs, dataloader, optimizer, loss_fn):
                     frame = frame.cuda()
                     gt = gt.cuda()
 
-                W_ab, S = models['corres'](frame, ref)
+                W_ab, S = nets['corres'](frame, ref)
 
-                pred = models['color'](ref[:, 1:], frame, W_ab, S)
+                pred = nets['color'](ref[:, 1:], frame, W_ab, S)
                 prev = pred
 
                 loss = loss_fn(pred, prev, gt, ref)
@@ -105,8 +105,8 @@ def train(models, epochs, dataloader, optimizer, loss_fn):
     # Save model
     if not os.path.isdir('checkpoints'):
         os.mkdir('checkpoints')
-    torch.save(models['corres'].state_dict(), 'checkpoints/corresnet.pth')
-    torch.save(models['color'].state_dict(), 'checkpoints/colornet.pth')
+    torch.save(nets['corres'].state_dict(), 'checkpoints/corresnet.pth')
+    torch.save(nets['color'].state_dict(), 'checkpoints/colornet.pth')
 
     return loss_history
 
@@ -120,13 +120,13 @@ if __name__ == '__main__':
     cutloader = DataLoader(data, batch_size=1, num_workers=4, shuffle=True)
 
     # Prepare model, optim, loss
-    models = {'corres': CorrespodenceNet(), 'color': Colornet()}
-    params = list(models['corres'].parameters()) + list(models['color'].parameters())
+    nets = {'corres': CorrespodenceNet(), 'color': Colornet()}
+    params = list(nets['corres'].parameters()) + list(nets['color'].parameters())
     optimizer = Adam(params)
     loss_fn = Loss()
 
     with torch.autograd.set_detect_anomaly(True):
-        history = train(models, EPOCHS, cutloader, optimizer, loss_fn)
+        history = train(nets, EPOCHS, cutloader, optimizer, loss_fn)
 
     if not os.path.isdir('result'):
         os.mkdir('result')
