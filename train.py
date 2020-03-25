@@ -7,13 +7,13 @@ from torch.optim import Adam
 import torchvision.transforms as transforms
 import torch
 
-def train(models, epochs, dataloader, optimizer, loss_fn):
+def train(nets, epochs, dataloader, optimizer, loss_fn):
     """
-    Tranin the models
+    Train the models
 
     Paramters
     ---------
-    models: dictionary
+    nets: dictionary
         The dictionary contains correspondence subnet and colorization subnet
     epochs: int
         Number of epochs to train
@@ -34,7 +34,7 @@ def train(models, epochs, dataloader, optimizer, loss_fn):
 
     # Setting models to train mode
 
-    for model in models.values():
+    for model in nets.values():
         model.train()
         if torch.cuda.is_available():
             model.cuda()
@@ -73,9 +73,9 @@ def train(models, epochs, dataloader, optimizer, loss_fn):
                     frame = frame.cuda()
                     gt = gt.cuda()
 
-                W_ab, S = models['corres'](frame, ref)
+                W_ab, S = nets['corres'](frame, ref)
 
-                pred_ab = models['color'](prev_ab[:, 1:], frame, W_ab, S)
+                pred_ab = nets['color'](prev_ab[:, 1:], frame, W_ab, S)
 
                 prev_ab = pred_ab
 
@@ -110,10 +110,10 @@ if __name__ == '__main__':
     cutloader = DataLoader(data, batch_size=1, shuffle=True)
 
     # Prepare model, optim, loss
-    models = {'corres': CorrespodenceNet(), 'color': Colornet()}
-    params = list(models['corres'].parameters()) + list(models['color'].parameters())
+    nets = {'corres': CorrespodenceNet(), 'color': Colornet()}
+    params = list(nets['corres'].parameters()) + list(nets['color'].parameters())
     optimizer = Adam(params)
     loss_fn = Loss()
 
     with torch.autograd.set_detect_anomaly(True):
-        history = train(models, 10, cutloader, optimizer, loss_fn)
+        history = train(nets, 10, cutloader, optimizer, loss_fn)
