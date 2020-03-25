@@ -147,8 +147,8 @@ class Colornet(nn.Module):
         Parameters:
         frame_prev: tensor
             The two channels ab of the previous colorized frame
-        frame_cur: tensor
-            The channel l of the current frame
+        frame_cur: tensor 
+            Channel l of the current frame
         Wab: tensor
             The warped color from the correspondece net
         S: tensor
@@ -158,11 +158,12 @@ class Colornet(nn.Module):
         -------
         output: tensor
             The current frame after being colorized by the net
+            (Lab-channel)
         """
-        # Stacking four inputs into 6 channels
 
+        # Stacking four inputs into 6 channels
         # [N, C, H, W]
-        input_stacked = torch.cat((frame_cur, frame_prev, Wab, S), 0).unsqueeze(0)
+        input_stacked = torch.cat((frame_cur, frame_prev, Wab, S), 1)
 
         # Downscale convolution bloc
         conv1 = self.conv_block_1(input_stacked)
@@ -186,5 +187,5 @@ class Colornet(nn.Module):
 
         output = self.conv_final(conv_up)
 
-        return output
+        return torch.cat((frame_cur, output), 1)
 
