@@ -6,6 +6,10 @@ from loss import Loss
 from torch.optim import Adam
 import torchvision.transforms as transforms
 import torch
+import matplotlib.pyplot as plt
+import os
+
+EPOCHS = 10
 
 def train(models, epochs, dataloader, optimizer, loss_fn):
     """
@@ -63,7 +67,8 @@ def train(models, epochs, dataloader, optimizer, loss_fn):
             frameloader = DataLoader(frames, batch_size=1)
             gtloader = DataLoader(gt, batch_size=1)
 
-            prev_ab = ref
+            # Initialize previous frame with reference image
+            prev = ref
 
             optimizer.zero_grad()
 
@@ -75,11 +80,10 @@ def train(models, epochs, dataloader, optimizer, loss_fn):
 
                 W_ab, S = models['corres'](frame, ref)
 
-                pred_ab = models['color'](prev_ab[:, 1:], frame, W_ab, S)
+                pred = models['color'](ref[:, 1:], frame, W_ab, S)
+                prev = pred
 
-                prev_ab = pred_ab
-
-                loss = loss_fn(pred_ab, prev_ab, gt, ref)
+                loss = loss_fn(pred, prev, gt, ref)
 
                 # Accumulate loss for the whole cut
                 cut_loss += loss
@@ -98,6 +102,12 @@ def train(models, epochs, dataloader, optimizer, loss_fn):
 
         loss_history.append(epoch_loss)
 
+    # Save model
+    if not os.path.isdir('checkpoints'):
+        os.mkdir('checkpoints')
+    torch.save(models['corres'].state_dict(), 'checkpoints/corresnet.pth')
+    torch.save(models['color'].state_dict(), 'checkpoints/colornet.pth')
+
     return loss_history
 
 if __name__ == '__main__':
@@ -107,7 +117,7 @@ if __name__ == '__main__':
 
     # Prepare data
     data = Dataset(path='data', transforms=trans)
-    cutloader = DataLoader(data, batch_size=1, shuffle=True)
+    cutloader = DataLoader(data, batch_size=1, num_workers=4, shuffle=True)
 
     # Prepare model, optim, loss
     models = {'corres': CorrespodenceNet(), 'color': Colornet()}
@@ -116,4 +126,13 @@ if __name__ == '__main__':
     loss_fn = Loss()
 
     with torch.autograd.set_detect_anomaly(True):
-        history = train(models, 10, cutloader, optimizer, loss_fn)
+        history = train(models, EPOCHS, cutloader, optimizer, loss_fn)
+
+    if not os.path.isdir('result'):
+        os.mkdir('result')
+    # Show loss
+    plt.plot(history, label='train')
+    plt.title('Loss')
+    plt.legend()
+    plt.savefig('result/loss.jpg')
+    plt.show()
