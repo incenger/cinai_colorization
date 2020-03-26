@@ -85,7 +85,7 @@ def train(nets, epochs, dataloader, optimizer, loss_fn):
 
                 W_ab, S = nets['corres'](frame, ref)
 
-                pred = nets['color'](frame, W_ab, S, prev[:, 1:])
+                pred = nets['color'](ref[:, :1], frame, W_ab, S)
                 prev = pred
 
                 loss = loss_fn(pred, prev, gt, ref)

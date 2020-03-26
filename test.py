@@ -55,7 +55,7 @@ def test(nets, frames, ref):
 
             W_ab, S = nets['corres'](frame, ref)
 
-            pred = nets['color'](ref[:, 1:], frame, W_ab, S)
+            pred = nets['color'](ref[:, :1], frame, W_ab, S)
             prev = pred
             
             preds.append(pred[0])
