@@ -65,7 +65,8 @@ def test(nets, frames, ref):
 def load_image(path, size=(64, 64), color_mode=-1):
     print(path)
     img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
-    img = cv2.resize(img, size)
+    if not size[0] == 0:
+        img = cv2.resize(img, size)
 
     if not color_mode == -1:
         img = cv2.cvtColor(img, color_mode)
@@ -83,14 +84,17 @@ if __name__ == '__main__':
 
     # Prepare data
     for idx, path_frame in enumerate(paths_frame):
-        img = load_image(path_frame)
+        img = load_image(path_frame, size=(112, 64))
+        img_ori = load_image(path_frame, size=(0, 0))
 
         if idx == 0:
             frames = img
+            ori = img_ori
         else:
             frames = torch.cat((frames, img), 0)
+            ori = torch.cat((ori, img_ori), 0)
 
-    ref = load_image(path_ref[0], color_mode=cv2.COLOR_BGR2LAB)
+    ref = load_image(path_ref[0], size=(112, 64), color_mode=cv2.COLOR_BGR2LAB)
     
     # Prepare model
     nets = {'corres': CorrespodenceNet(), 'color': Colornet()}
@@ -104,7 +108,13 @@ if __name__ == '__main__':
             image = image.cpu()
         image = 255*image.permute(1, 2, 0).numpy()  # ToTensor() normalize image, convert it back
         image = image.astype(np.uint8)              # OpenCV2 supports uint8
-        image = cv2.cvtColor(image, cv2.COLOR_LAB2BGR)
-        cv2.imwrite(path + '/res/' + str(idx) + '.jpg', image)
+        small = cv2.cvtColor(image, cv2.COLOR_LAB2BGR)
+        cv2.imwrite(path + '/res/' + str(idx) + '.jpg', small)
+
+        # Save upscale image
+        big = cv2.resize(image, (1920, 1080))
+        big[:, :, 0] = (255*ori[idx].numpy()).astype(np.uint8)  # Use the original L-channel
+        big = cv2.cvtColor(big, cv2.COLOR_LAB2BGR)
+        cv2.imwrite(path + '/res/up_' + str(idx) + '.jpg', big)
 
     print('Done')

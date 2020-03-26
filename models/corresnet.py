@@ -128,11 +128,17 @@ class CorrespodenceNet(nn.Module):
         y_feature -= y_feature.clone().mean(dim=0, keepdim=True)
         y_feature /= y_feature.clone().norm(dim=0, keepdim=True)  # [HW, C]
 
-        correlation_matrix = torch.mm(x_feature, y_feature.T)   # [HW, HW]
+        # Initialize W and S
+        warped_color = torch.zeros((h*w, 2), requires_grad=True)
+        confidence_map = torch.zeros(h*w, requires_grad=True)
+        if torch.cuda.is_available():
+            warped_color = warped_color.cuda()
+            confidence_map = confidence_map.cuda()
 
-        warped_color = self.softmax(correlation_matrix / TAU)                # [HW, HW]
-        warped_color = torch.mm(warped_color, ref[0, 1:].reshape((2, -1)).T)    # [HW, 2]
-        confidence_map = correlation_matrix.max(dim=1).values                # [HW]
+        for idx in range(0, x_feature.size()[0], 2):
+            correlation = torch.mm(x_feature[idx:idx+2], y_feature.T)    # [2, HW]
+            warped_color[idx:idx+2] = torch.mm(nn.Softmax(dim=1)(correlation/TAU), ref[0, 1:].reshape((2, -1)).T)  # [2, 2]
+            confidence_map[idx:idx+2] = correlation.max(dim=1).values
 
         return warped_color.T.reshape((1, 2, h, w)), confidence_map.reshape((1, 1, h, w))
 
@@ -168,24 +174,6 @@ class CorrespodenceNet(nn.Module):
         feature = self.resblock3(feature)
 
         return feature.reshape((feature.size()[1], -1)).T
-
-    
-    def softmax(self, x):
-        '''
-        Compute stable softmax over rows of x.
-
-        ----------
-        Parameters:
-        x: Tensor with size [H, W]
-
-        ----------
-        Return:
-        Tensor with size [H, W]
-        '''
-
-        x_exp = (x - x.max(dim=1, keepdim=True).values).exp()
-        delta = x_exp / x_exp.sum(dim=1, keepdim=True)
-        return delta
 
 
 if __name__ == '__main__':

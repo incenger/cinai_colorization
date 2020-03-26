@@ -114,7 +114,7 @@ class Colornet(nn.Module):
 
         # Final bloc
         conv_final = [nn.Conv2d(64, 2, kernel_size=3, stride=1, padding=1, bias=use_bias)]
-        conv_final += [nn.Tanh()]
+        conv_final += [nn.Sigmoid()]
 
         self.conv_block_1 = nn.Sequential(*conv_block_1)
         self.downscale_1 = nn.Sequential(*downscale_1)

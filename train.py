@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 import os
 
 EPOCHS = 10
+LEARNING_RATE = 2*1e-4
+BETAS = (0.5, 0.999)
 
 def train(nets, epochs, dataloader, optimizer, loss_fn):
     """
@@ -33,6 +35,9 @@ def train(nets, epochs, dataloader, optimizer, loss_fn):
     loss_history : list
         The loss of each epoch
     """
+
+    if not os.path.isdir('checkpoints'):
+        os.mkdir('checkpoints')
 
     loss_history = []
 
@@ -80,7 +85,7 @@ def train(nets, epochs, dataloader, optimizer, loss_fn):
 
                 W_ab, S = nets['corres'](frame, ref)
 
-                pred = nets['color'](ref[:, 1:], frame, W_ab, S)
+                pred = nets['color'](frame, W_ab, S, prev[:, 1:])
                 prev = pred
 
                 loss = loss_fn(pred, prev, gt, ref)
@@ -102,11 +107,9 @@ def train(nets, epochs, dataloader, optimizer, loss_fn):
 
         loss_history.append(epoch_loss)
 
-    # Save model
-    if not os.path.isdir('checkpoints'):
-        os.mkdir('checkpoints')
-    torch.save(nets['corres'].state_dict(), 'checkpoints/corresnet.pth')
-    torch.save(nets['color'].state_dict(), 'checkpoints/colornet.pth')
+        # Save weights
+        torch.save(nets['corres'].state_dict(), 'checkpoints/corresnet.pth')
+        torch.save(nets['color'].state_dict(), 'checkpoints/colornet.pth')
 
     return loss_history
 
@@ -116,13 +119,13 @@ if __name__ == '__main__':
     ])
 
     # Prepare data
-    data = Dataset(path='data', transforms=trans)
+    data = Dataset(path='data', size=(112, 64), transforms=trans)
     cutloader = DataLoader(data, batch_size=1, num_workers=4, shuffle=True)
 
     # Prepare model, optim, loss
     nets = {'corres': CorrespodenceNet(), 'color': Colornet()}
     params = list(nets['corres'].parameters()) + list(nets['color'].parameters())
-    optimizer = Adam(params)
+    optimizer = Adam(params, lr=LEARNING_RATE, betas=BETAS, amsgrad=True)
     loss_fn = Loss()
 
     with torch.autograd.set_detect_anomaly(True):
