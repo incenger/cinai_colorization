@@ -1,3 +1,4 @@
+from skimage import color
 import torch
 import cv2
 import glob
@@ -5,21 +6,18 @@ import numpy as np
 import random
 
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, path, size=(64, 64), transforms=None):
+    def __init__(self, path, size=(64, 64)):
         '''
         Parameters:
         size: tuple of 2 unsigned integers
             New size of image.
         path: str
             Path to data folder.
-        transforms: list of Transform object
-            Transforms to be applied on a sample.
         '''
 
         super(Dataset, self).__init__()
 
         self.size = size
-        self.transforms = transforms
         self.folders = glob.glob(path + '/*')
         self.folders.sort()
 
@@ -50,7 +48,7 @@ class Dataset(torch.utils.data.Dataset):
         path_ref = glob.glob(folder + '/ref/*')[0]
 
         for idx, path in enumerate(paths_frame):
-            img = self.image(path, self.size, self.transforms, seed, color_mode=cv2.COLOR_BGR2LAB)
+            img = self.image(path, self.size, seed)
 
             if idx == 0:
                 L = img[:, 0].unsqueeze(0)
@@ -59,12 +57,12 @@ class Dataset(torch.utils.data.Dataset):
                 L = torch.cat((L, img[:, 0].unsqueeze(0)), 0)
                 Lab = torch.cat((Lab, img), 0)
         
-        ref = self.image(path_ref, self.size, self.transforms, seed, color_mode=cv2.COLOR_BGR2LAB)
+        ref = self.image(path_ref, self.size, seed)
 
         return {'L': L, 'Lab': Lab, 'ref': ref} # Combine to a single dictionary
 
 
-    def image(self, path, size, transforms, seed, color_mode=-1):
+    def image(self, path, size, seed):
         '''
         Read image and process.
 
@@ -74,47 +72,30 @@ class Dataset(torch.utils.data.Dataset):
             Path to image.
         size: tuple of 2 unsigned integers
             New size of the image.
-        transforms:
-            Transforms to be applied on a sample.
         seed: int
             Set the seed for random generator.
-        color_mode: 
-            Mode of converting color space in OpenCV2.
 
         ----------
         Return:
         Tensor of image with size [1, 3, H, W]
         '''
 
+        # Load image, resize and convert to CIELAB
         img = cv2.imread(path)
         img = cv2.resize(img, size)
-
-        if not color_mode == -1:
-            img = cv2.cvtColor(img, color_mode)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = color.rgb2lab(img).astype(np.float32)
             
-        if transforms:
-            from PIL import Image
-
-            img = Image.fromarray(img)
-            random.seed(seed)
-            img = transforms(img)
-        else:
-            img = torch.from_numpy(img).permute(2, 0, 1)
+        random.seed(seed)
+        # Random horizontal and vertical
+        # Not yet implement
+        img = torch.from_numpy(img).permute(2, 0, 1)    # Convert [H, W, C] to [C, H, W]
 
         return img.unsqueeze(0)
 
 
 if __name__ == '__main__':
-    import torchvision.transforms as transforms
-
-    trans = transforms.Compose([
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomVerticalFlip(),
-        transforms.RandomRotation(90),
-        transforms.ToTensor()
-    ])
-
-    data = Dataset(size=(480, 272), transforms=trans)
+    data = Dataset('data', size=(480, 272))
     frames = data[0]
 
     # Check size
@@ -122,12 +103,10 @@ if __name__ == '__main__':
     print(frames['Lab'].size())
     print(frames['ref'].size())
 
-    img = frames['Lab'][0].permute(1, 2, 0)
-    # Convert back to BGR image for visualizing
-    img = 255*img.detach().numpy()
-    img = img.astype(np.uint8)  # OpenCV supports uint8 for integer values
-    img = cv2.cvtColor(img, cv2.COLOR_LAB2BGR)
-
-    # Visualize
-    cv2.imshow('test', img)
+    # Convert back to RGB
+    img = frames['Lab'][0].detach()
+    img = img.permute(1, 2, 0).numpy()
+    img = color.lab2rgb(img).astype(np.float32)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    cv2.imshow('abc', img)
     cv2.waitKey(0)

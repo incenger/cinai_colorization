@@ -114,7 +114,7 @@ class Colornet(nn.Module):
 
         # Final bloc
         conv_final = [nn.Conv2d(64, 2, kernel_size=3, stride=1, padding=1, bias=use_bias)]
-        conv_final += [nn.Sigmoid()]
+        conv_final += [nn.Tanh()]
 
         self.conv_block_1 = nn.Sequential(*conv_block_1)
         self.downscale_1 = nn.Sequential(*downscale_1)
@@ -157,8 +157,7 @@ class Colornet(nn.Module):
         Returns:
         -------
         output: tensor
-            The current frame after being colorized by the net
-            (Lab-channel)
+            The ab-channel current frame after being colorized by the net
         """
 
         # Stacking four inputs into 6 channels
@@ -187,5 +186,5 @@ class Colornet(nn.Module):
 
         output = self.conv_final(conv_up)
 
-        return torch.cat((frame_cur, output), 1)
+        return output*100
 

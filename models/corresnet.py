@@ -67,6 +67,7 @@ class CorrespodenceNet(nn.Module):
         # Extract feature maps from VGG19 relu2_2, relu3_2, relu4_2, relu5_2
         self.vgg19_relu2_2 = nn.Sequential(
             vgg19.features[:12],  #vgg19:  8, vgg19_bn : 12
+            #vgg19.features[:13],
             PadConvNorm(128, 128),
             nn.ReLU(True),
             PadConvNorm(128, 256, stride=2),
@@ -74,6 +75,7 @@ class CorrespodenceNet(nn.Module):
         )
         self.vgg19_relu3_2 = nn.Sequential(
             vgg19.features[:19],  #vgg19: 13, vgg19_bn : 19
+            #vgg19.features[:20],
             PadConvNorm(256, 128),
             nn.ReLU(True),
             PadConvNorm(128, 256),
@@ -81,6 +83,7 @@ class CorrespodenceNet(nn.Module):
         )
         self.vgg19_relu4_2 = nn.Sequential(
             vgg19.features[:32],  #vgg19: 22, vgg19_bn : 32
+            #vgg19.features[:33],
             PadConvNorm(512, 256),
             nn.ReLU(True),
             PadConvNorm(256, 256, tranpose=True),
@@ -88,6 +91,7 @@ class CorrespodenceNet(nn.Module):
         )
         self.vgg19_relu5_2 = nn.Sequential(
             vgg19.features[:45],  #vgg19: 31, vgg19_bn : 45
+            #vgg19.features[:46],
             PadConvNorm(512, 256, tranpose=True),
             nn.ReLU(True),
             PadConvNorm(256, 256, tranpose=True),
@@ -177,34 +181,49 @@ class CorrespodenceNet(nn.Module):
 
 
 if __name__ == '__main__':
+    from skimage import color
     import cv2
     import torchvision
     import numpy as np
 
     # Load images
-    img1 = cv2.imread('data/train/0/frames/0_0.jpg')
-    img2 = cv2.imread('data/train/0/frames/0_1.jpg')
+    img1 = cv2.imread('data/cut_000/frames/000_726.jpg')
+    img2 = cv2.imread('data/cut_000/frames/000_738.jpg')
     # Resize to 64 x 64
-    img1 = cv2.resize(img1, (64, 64))
-    img2 = cv2.resize(img2, (64, 64))
+    img1 = cv2.resize(img1, (112, 64))
+    img2 = cv2.resize(img2, (112, 64))
     # Convert to CIELAB color space
-    img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2LAB)
-    img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2LAB)
+    img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2RGB)
+    img1 = color.rgb2lab(img1).astype(np.float32)
+    img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2RGB)
+    img2 = color.rgb2lab(img2).astype(np.float32)
     
-    # Convert to Cuda Tensor
-    img1 = torchvision.transforms.ToTensor()(img1)#.to('cuda')
-    img2 = torchvision.transforms.ToTensor()(img2)#.to('cuda')
+    # Convert to Tensor
+    img1 = torch.from_numpy(img1).permute(2, 0, 1).unsqueeze(0)
+    img2 = torch.from_numpy(img2).permute(2, 0, 1).unsqueeze(0)
 
-    img_l = img1[0]
+    # Prepare model
+    net = CorrespodenceNet()
 
-    # Get the result
-    net = CorrespodenceNet()#.to('cuda')
+    # Convert to CUDA
+    if torch.cuda.is_available():
+        img1 = img1.cuda()
+        img2 = img2.cuda()
+        net.cuda()
+
+    img_l = img1[:, :1]
+
+    # Get warped color and confidence map
     W, S = net(img_l, img2)
-    img = torch.cat((img_l.unsqueeze(0), W), 0).permute(1, 2, 0)
-    # Convert back to BGR image for visualizing
-    img = 255*img.detach().numpy()
-    img = img.astype(np.uint8)  # OpenCV supports uint8 for integer values
-    img = cv2.cvtColor(img, cv2.COLOR_LAB2BGR)
+    
+    img = torch.cat((img_l, W), 1).squeeze().permute(1, 2, 0)
+    # # Convert back to BGR image for visualizing
+    img = img.detach().numpy().astype(np.float64)
+    img = color.lab2rgb(img).astype(np.float32)
+    img = (255*img).astype(np.uint8)
+    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+    
+    print('Done')
     
     # Visualize
     cv2.imshow('abc', img)
