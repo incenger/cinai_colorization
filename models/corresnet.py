@@ -66,32 +66,28 @@ class CorrespodenceNet(nn.Module):
 
         # Extract feature maps from VGG19 relu2_2, relu3_2, relu4_2, relu5_2
         self.vgg19_relu2_2 = nn.Sequential(
-            vgg19.features[:12],  #vgg19:  8, vgg19_bn : 12
-            #vgg19.features[:13],
+            vgg19.features[:13],  #vgg19:  8, vgg19_bn : 12
             PadConvNorm(128, 128),
             nn.ReLU(True),
             PadConvNorm(128, 256, stride=2),
             nn.ReLU(True),
         )
         self.vgg19_relu3_2 = nn.Sequential(
-            vgg19.features[:19],  #vgg19: 13, vgg19_bn : 19
-            #vgg19.features[:20],
+            vgg19.features[:20],  #vgg19: 13, vgg19_bn : 19
             PadConvNorm(256, 128),
             nn.ReLU(True),
             PadConvNorm(128, 256),
             nn.ReLU(True),
         )
         self.vgg19_relu4_2 = nn.Sequential(
-            vgg19.features[:32],  #vgg19: 22, vgg19_bn : 32
-            #vgg19.features[:33],
+            vgg19.features[:33],  #vgg19: 22, vgg19_bn : 32
             PadConvNorm(512, 256),
             nn.ReLU(True),
             PadConvNorm(256, 256, tranpose=True),
             nn.ReLU(True),
         )
         self.vgg19_relu5_2 = nn.Sequential(
-            vgg19.features[:45],  #vgg19: 31, vgg19_bn : 45
-            #vgg19.features[:46],
+            vgg19.features[:46],  #vgg19: 31, vgg19_bn : 45
             PadConvNorm(512, 256, tranpose=True),
             nn.ReLU(True),
             PadConvNorm(256, 256, tranpose=True),
@@ -127,14 +123,12 @@ class CorrespodenceNet(nn.Module):
         x_feature = self.feature(cur_frame) # [HW, C]
         y_feature = self.feature(ref[:, :1]) # [HW, C]
         # Normalize vector
-        x_feature -= x_feature.clone().mean(dim=0, keepdim=True)
-        x_feature /= x_feature.clone().norm(dim=0, keepdim=True)  # [HW, C]
-        y_feature -= y_feature.clone().mean(dim=0, keepdim=True)
-        y_feature /= y_feature.clone().norm(dim=0, keepdim=True)  # [HW, C]
+        x_feature = (x_feature - x_feature.mean(dim=0)) / x_feature.norm(dim=0) # [HW, C]
+        y_feature = (y_feature - y_feature.mean(dim=0)) / y_feature.norm(dim=0) # [HW, C]
 
         # Initialize W and S
-        warped_color = torch.zeros((h*w, 2), requires_grad=True)
-        confidence_map = torch.zeros(h*w, requires_grad=True)
+        warped_color = torch.zeros((h*w, 2))#, requires_grad=True)
+        confidence_map = torch.zeros(h*w)#, requires_grad=True)
         if torch.cuda.is_available():
             warped_color = warped_color.cuda()
             confidence_map = confidence_map.cuda()
@@ -201,6 +195,8 @@ if __name__ == '__main__':
     # Convert to Tensor
     img1 = torch.from_numpy(img1).permute(2, 0, 1).unsqueeze(0)
     img2 = torch.from_numpy(img2).permute(2, 0, 1).unsqueeze(0)
+    img1[0, 0] -= 50.
+    img2[0, 0] -= 50.
 
     # Prepare model
     net = CorrespodenceNet()
@@ -216,6 +212,7 @@ if __name__ == '__main__':
     # Get warped color and confidence map
     W, S = net(img_l, img2)
     
+    img_l += 50.
     img = torch.cat((img_l, W), 1).squeeze().permute(1, 2, 0)
     # # Convert back to BGR image for visualizing
     img = img.detach().numpy().astype(np.float64)

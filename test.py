@@ -9,6 +9,13 @@ import os
 import cv2
 import glob
 import numpy as np
+import argparse
+
+parser = argparse.ArgumentParser(description='Test Colorization Model')
+parser.add_argument('--path', default='test', type=str, help='Path to testing data folder')
+opt = parser.parse_args()
+
+PATH = opt.path
 
 def test(nets, frames, ref):
     """
@@ -45,7 +52,7 @@ def test(nets, frames, ref):
     frameloader = DataLoader(frames, batch_size=1)
 
     # Initialize previous frame with reference image
-    prev = ref[:, 1:]
+    prev = ref
 
     preds = []
 
@@ -56,10 +63,11 @@ def test(nets, frames, ref):
                 frame = frame.cuda()
 
             W_ab, S = nets['corres'](frame, ref)
+            pred = nets['color'](prev, frame, W_ab, S)
 
-            pred = nets['color'](ref[:, 1:], frame, W_ab, S)
-            prev = pred
             pred = torch.cat((frame, pred), 1)
+            prev = pred
+
             preds.append(pred[0])
 
     return preds
@@ -87,7 +95,7 @@ def load_image(path, size=(0, 0), mode='rgb'):
         img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
         if not size[0] == 0:
             img = cv2.resize(img, size)
-        img = 100./255. * img.astype(np.float32)
+        img = (img.astype(np.float32) - 127.) * 100./255. + 50.
         img = np.expand_dims(img, axis=-1)
     else:
         img = cv2.imread(path)
@@ -98,12 +106,13 @@ def load_image(path, size=(0, 0), mode='rgb'):
             img = color.rgb2lab(img).astype(np.float32)
 
     img = torch.from_numpy(img).permute(2, 0, 1)
+    img[0] -= 50.
 
     return img.unsqueeze(0)
 
 if __name__ == '__main__':
     # Prepare paths
-    path = 'test' # Path to test folder
+    path = PATH
     paths_frame = glob.glob(path + '/frames/*')
     paths_frame.sort()
     path_ref = glob.glob(path + '/ref/*')
@@ -123,8 +132,8 @@ if __name__ == '__main__':
     ref = load_image(path_ref[0], size=(112, 64), mode='lab')
     
     # Prepare model
-    nets = {'corres': CorrespodenceNet(), 'color': Colornet()}
-    #nets = {'corres': CorrespodenceNet(), 'color': ExampleColorNet()}
+    #nets = {'corres': CorrespodenceNet(), 'color': Colornet()}
+    nets = {'corres': CorrespodenceNet(), 'color': ExampleColorNet()}
     res = test(nets, frames, ref)
     print('Get result!')
 
@@ -134,6 +143,7 @@ if __name__ == '__main__':
     for idx, image in enumerate(res):
         if torch.cuda.is_available():
             image = image.cpu()
+        image[0] += 50.
         image = image.permute(1, 2, 0).numpy().astype(np.float64)
         small = color.lab2rgb(image).astype(np.float32)
         small = (255*small).astype(np.uint8)
@@ -141,8 +151,8 @@ if __name__ == '__main__':
         cv2.imwrite(path + '/res/' + str(idx) + '.jpg', small)
 
         # Save upscale image
-        big = cv2.resize(image, (1920, 1080))
-        big[:, :, 0] = ori[idx].numpy().astype(np.float64)  # Use the original L-channel
+        big = cv2.resize(image, (1920, 1080), interpolation=cv2.INTER_CUBIC)
+        big[:, :, 0] = ori[idx].numpy().astype(np.float64) + 50.  # Use the original L-channel
         big = color.lab2rgb(big).astype(np.float32)
         big = (255*big).astype(np.uint8)
         big = cv2.cvtColor(big, cv2.COLOR_RGB2BGR)

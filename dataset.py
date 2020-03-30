@@ -1,5 +1,6 @@
 from skimage import color
 import torch
+import torchvision.transforms as transforms
 import cv2
 import glob
 import numpy as np
@@ -90,6 +91,7 @@ class Dataset(torch.utils.data.Dataset):
         # Random horizontal and vertical
         # Not yet implement
         img = torch.from_numpy(img).permute(2, 0, 1)    # Convert [H, W, C] to [C, H, W]
+        img[0] -= 50.   # Subtract mean values for VGG19
 
         return img.unsqueeze(0)
 
@@ -105,6 +107,7 @@ if __name__ == '__main__':
 
     # Convert back to RGB
     img = frames['Lab'][0].detach()
+    img[0] += 50.
     img = img.permute(1, 2, 0).numpy()
     img = color.lab2rgb(img).astype(np.float32)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)

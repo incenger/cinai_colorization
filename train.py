@@ -8,8 +8,15 @@ from torch.optim import Adam
 import torch
 import matplotlib.pyplot as plt
 import os
+import argparse
 
-EPOCHS = 5
+parser = argparse.ArgumentParser(description='Train Colorization Model')
+parser.add_argument('--path', default='data', type=str, help='Path to the training data folder')
+parser.add_argument('--num_epochs', default=10, type=int, help='Number of epochs to train')
+opt = parser.parse_args()
+
+PATH = opt.path
+EPOCHS = opt.num_epochs
 LEARNING_RATE = 2*1e-4
 BETAS = (0.5, 0.999)
 
@@ -73,7 +80,7 @@ def train(nets, epochs, dataloader, optimizer, loss_fn):
             gtloader = DataLoader(gt, batch_size=1)
 
             # Initialize previous frame with reference image
-            prev = ref[:, 1:]
+            prev = ref
 
             optimizer.zero_grad()
 
@@ -84,10 +91,10 @@ def train(nets, epochs, dataloader, optimizer, loss_fn):
                     gt = gt.cuda()
 
                 W_ab, S = nets['corres'](frame, ref)
+                pred = nets['color'](prev, frame, W_ab, S)
 
-                pred = nets['color'](ref[:, 1:], frame, W_ab, S)
-                #prev = pred
                 pred = torch.cat((frame, pred), 1)
+                prev = gt if epoch < 7 else pred
 
                 loss = loss_fn(pred, prev, gt, ref)
 
@@ -116,12 +123,12 @@ def train(nets, epochs, dataloader, optimizer, loss_fn):
 
 if __name__ == '__main__':
     # Prepare data
-    data = Dataset(path='data', size=(112, 64))
+    data = Dataset(path=PATH, size=(112, 64))
     cutloader = DataLoader(data, batch_size=1, num_workers=4, shuffle=True)
 
     # Prepare model, optim, loss
-    nets = {'corres': CorrespodenceNet(), 'color': Colornet()}
-    #nets = {'corres': CorrespodenceNet(), 'color': ExampleColorNet()}
+    #nets = {'corres': CorrespodenceNet(), 'color': Colornet()}
+    nets = {'corres': CorrespodenceNet(), 'color': ExampleColorNet()}
     params = list(nets['corres'].parameters()) + list(nets['color'].parameters())
     optimizer = Adam(params, lr=LEARNING_RATE, betas=BETAS, amsgrad=True)
     loss_fn = Loss()
