@@ -45,7 +45,7 @@ class Colornet(nn.Module):
         norm_layer = nn.InstanceNorm2d
 
         # Conv block 1
-        conv_block_1 = [nn.Conv2d(6, 64, kernel_size=3, stride=1, padding=1, bias=use_bias), ]
+        conv_block_1 = [nn.Conv2d(7, 64, kernel_size=3, stride=1, padding=1, bias=use_bias), ]
         conv_block_1 += [nn.ReLU(True), ]
         conv_block_1 += [nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1, bias=use_bias), ]
         conv_block_1 += [nn.ReLU(True), ]
@@ -114,7 +114,7 @@ class Colornet(nn.Module):
 
         # Final bloc
         conv_final = [nn.Conv2d(64, 2, kernel_size=3, stride=1, padding=1, bias=use_bias)]
-        conv_final += [nn.Tanh()]
+        #conv_final += [nn.Tanh()]
 
         self.conv_block_1 = nn.Sequential(*conv_block_1)
         self.downscale_1 = nn.Sequential(*downscale_1)
@@ -157,13 +157,12 @@ class Colornet(nn.Module):
         Returns:
         -------
         output: tensor
-            The current frame after being colorized by the net
-            (Lab-channel)
+            The ab-channel current frame after being colorized by the net
         """
 
         # Stacking four inputs into 6 channels
         # [N, C, H, W]
-        input_stacked = torch.cat((frame_cur, frame_prev, Wab, S), 1)
+        input_stacked = torch.cat((frame_cur, Wab, S, frame_prev), 1)
 
         # Downscale convolution bloc
         conv1 = self.conv_block_1(input_stacked)
@@ -186,6 +185,7 @@ class Colornet(nn.Module):
         conv_up = self.conv_block_9(conv_up)
 
         output = self.conv_final(conv_up)
+        output = 100 * torch.tanh(output)
 
-        return torch.cat((frame_cur, output), 1)
+        return output
 

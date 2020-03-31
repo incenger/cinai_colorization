@@ -66,28 +66,28 @@ class CorrespodenceNet(nn.Module):
 
         # Extract feature maps from VGG19 relu2_2, relu3_2, relu4_2, relu5_2
         self.vgg19_relu2_2 = nn.Sequential(
-            vgg19.features[:12],  #vgg19:  8, vgg19_bn : 12
+            vgg19.features[:13],  #vgg19:  8, vgg19_bn : 12
             PadConvNorm(128, 128),
             nn.ReLU(True),
             PadConvNorm(128, 256, stride=2),
             nn.ReLU(True),
         )
         self.vgg19_relu3_2 = nn.Sequential(
-            vgg19.features[:19],  #vgg19: 13, vgg19_bn : 19
+            vgg19.features[:20],  #vgg19: 13, vgg19_bn : 19
             PadConvNorm(256, 128),
             nn.ReLU(True),
             PadConvNorm(128, 256),
             nn.ReLU(True),
         )
         self.vgg19_relu4_2 = nn.Sequential(
-            vgg19.features[:32],  #vgg19: 22, vgg19_bn : 32
+            vgg19.features[:33],  #vgg19: 22, vgg19_bn : 32
             PadConvNorm(512, 256),
             nn.ReLU(True),
             PadConvNorm(256, 256, tranpose=True),
             nn.ReLU(True),
         )
         self.vgg19_relu5_2 = nn.Sequential(
-            vgg19.features[:45],  #vgg19: 31, vgg19_bn : 45
+            vgg19.features[:46],  #vgg19: 31, vgg19_bn : 45
             PadConvNorm(512, 256, tranpose=True),
             nn.ReLU(True),
             PadConvNorm(256, 256, tranpose=True),
@@ -123,16 +123,20 @@ class CorrespodenceNet(nn.Module):
         x_feature = self.feature(cur_frame) # [HW, C]
         y_feature = self.feature(ref[:, :1]) # [HW, C]
         # Normalize vector
-        x_feature -= x_feature.clone().mean(dim=0, keepdim=True)
-        x_feature /= x_feature.clone().norm(dim=0, keepdim=True)  # [HW, C]
-        y_feature -= y_feature.clone().mean(dim=0, keepdim=True)
-        y_feature /= y_feature.clone().norm(dim=0, keepdim=True)  # [HW, C]
+        x_feature = (x_feature - x_feature.mean(dim=0)) / x_feature.norm(dim=0) # [HW, C]
+        y_feature = (y_feature - y_feature.mean(dim=0)) / y_feature.norm(dim=0) # [HW, C]
 
-        correlation_matrix = torch.mm(x_feature, y_feature.T)   # [HW, HW]
+        # Initialize W and S
+        warped_color = torch.zeros((h*w, 2))#, requires_grad=True)
+        confidence_map = torch.zeros(h*w)#, requires_grad=True)
+        if torch.cuda.is_available():
+            warped_color = warped_color.cuda()
+            confidence_map = confidence_map.cuda()
 
-        warped_color = self.softmax(correlation_matrix / TAU)                # [HW, HW]
-        warped_color = torch.mm(warped_color, ref[0, 1:].reshape((2, -1)).T)    # [HW, 2]
-        confidence_map = correlation_matrix.max(dim=1).values                # [HW]
+        for idx in range(0, x_feature.size()[0], 2):
+            correlation = torch.mm(x_feature[idx:idx+2], y_feature.T)    # [2, HW]
+            warped_color[idx:idx+2] = torch.mm(nn.Softmax(dim=1)(correlation/TAU), ref[0, 1:].reshape((2, -1)).T)  # [2, 2]
+            confidence_map[idx:idx+2] = correlation.max(dim=1).values
 
         return warped_color.T.reshape((1, 2, h, w)), confidence_map.reshape((1, 1, h, w))
 
@@ -169,54 +173,54 @@ class CorrespodenceNet(nn.Module):
 
         return feature.reshape((feature.size()[1], -1)).T
 
-    
-    def softmax(self, x):
-        '''
-        Compute stable softmax over rows of x.
-
-        ----------
-        Parameters:
-        x: Tensor with size [H, W]
-
-        ----------
-        Return:
-        Tensor with size [H, W]
-        '''
-
-        x_exp = (x - x.max(dim=1, keepdim=True).values).exp()
-        delta = x_exp / x_exp.sum(dim=1, keepdim=True)
-        return delta
-
 
 if __name__ == '__main__':
+    from skimage import color
     import cv2
     import torchvision
     import numpy as np
 
     # Load images
-    img1 = cv2.imread('data/train/0/frames/0_0.jpg')
-    img2 = cv2.imread('data/train/0/frames/0_1.jpg')
+    img1 = cv2.imread('data/cut_000/frames/000_726.jpg')
+    img2 = cv2.imread('data/cut_000/frames/000_738.jpg')
     # Resize to 64 x 64
-    img1 = cv2.resize(img1, (64, 64))
-    img2 = cv2.resize(img2, (64, 64))
+    img1 = cv2.resize(img1, (112, 64))
+    img2 = cv2.resize(img2, (112, 64))
     # Convert to CIELAB color space
-    img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2LAB)
-    img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2LAB)
+    img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2RGB)
+    img1 = color.rgb2lab(img1).astype(np.float32)
+    img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2RGB)
+    img2 = color.rgb2lab(img2).astype(np.float32)
     
-    # Convert to Cuda Tensor
-    img1 = torchvision.transforms.ToTensor()(img1)#.to('cuda')
-    img2 = torchvision.transforms.ToTensor()(img2)#.to('cuda')
+    # Convert to Tensor
+    img1 = torch.from_numpy(img1).permute(2, 0, 1).unsqueeze(0)
+    img2 = torch.from_numpy(img2).permute(2, 0, 1).unsqueeze(0)
+    img1[0, 0] -= 50.
+    img2[0, 0] -= 50.
 
-    img_l = img1[0]
+    # Prepare model
+    net = CorrespodenceNet()
 
-    # Get the result
-    net = CorrespodenceNet()#.to('cuda')
+    # Convert to CUDA
+    if torch.cuda.is_available():
+        img1 = img1.cuda()
+        img2 = img2.cuda()
+        net.cuda()
+
+    img_l = img1[:, :1]
+
+    # Get warped color and confidence map
     W, S = net(img_l, img2)
-    img = torch.cat((img_l.unsqueeze(0), W), 0).permute(1, 2, 0)
-    # Convert back to BGR image for visualizing
-    img = 255*img.detach().numpy()
-    img = img.astype(np.uint8)  # OpenCV supports uint8 for integer values
-    img = cv2.cvtColor(img, cv2.COLOR_LAB2BGR)
+    
+    img_l += 50.
+    img = torch.cat((img_l, W), 1).squeeze().permute(1, 2, 0)
+    # # Convert back to BGR image for visualizing
+    img = img.detach().numpy().astype(np.float64)
+    img = color.lab2rgb(img).astype(np.float32)
+    img = (255*img).astype(np.uint8)
+    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+    
+    print('Done')
     
     # Visualize
     cv2.imshow('abc', img)

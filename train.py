@@ -2,14 +2,23 @@ from dataset import Dataset
 from torch.utils.data import DataLoader
 from models.colornet import Colornet
 from models.corresnet import CorrespodenceNet
+from models.color import ExampleColorNet
 from loss import Loss
 from torch.optim import Adam
-import torchvision.transforms as transforms
 import torch
 import matplotlib.pyplot as plt
 import os
+import argparse
 
-EPOCHS = 10
+parser = argparse.ArgumentParser(description='Train Colorization Model')
+parser.add_argument('--path', default='data', type=str, help='Path to the training data folder')
+parser.add_argument('--num_epochs', default=10, type=int, help='Number of epochs to train')
+opt = parser.parse_args()
+
+PATH = opt.path
+EPOCHS = opt.num_epochs
+LEARNING_RATE = 2*1e-4
+BETAS = (0.5, 0.999)
 
 def train(nets, epochs, dataloader, optimizer, loss_fn):
     """
@@ -33,6 +42,9 @@ def train(nets, epochs, dataloader, optimizer, loss_fn):
     loss_history : list
         The loss of each epoch
     """
+
+    if not os.path.isdir('checkpoints'):
+        os.mkdir('checkpoints')
 
     loss_history = []
 
@@ -79,9 +91,10 @@ def train(nets, epochs, dataloader, optimizer, loss_fn):
                     gt = gt.cuda()
 
                 W_ab, S = nets['corres'](frame, ref)
+                pred = nets['color'](prev, frame, W_ab, S)
 
-                pred = nets['color'](ref[:, 1:], frame, W_ab, S)
-                prev = pred
+                pred = torch.cat((frame, pred), 1)
+                prev = gt if epoch < 7 else pred
 
                 loss = loss_fn(pred, prev, gt, ref)
 
@@ -102,27 +115,22 @@ def train(nets, epochs, dataloader, optimizer, loss_fn):
 
         loss_history.append(epoch_loss)
 
-    # Save model
-    if not os.path.isdir('checkpoints'):
-        os.mkdir('checkpoints')
-    torch.save(nets['corres'].state_dict(), 'checkpoints/corresnet.pth')
-    torch.save(nets['color'].state_dict(), 'checkpoints/colornet.pth')
+        # Save weights
+        torch.save(nets['corres'].state_dict(), 'checkpoints/corresnet.pth')
+        torch.save(nets['color'].state_dict(), 'checkpoints/colornet.pth')
 
     return loss_history
 
 if __name__ == '__main__':
-    trans = transforms.Compose([
-        transforms.ToTensor()
-    ])
-
     # Prepare data
-    data = Dataset(path='data', transforms=trans)
+    data = Dataset(path=PATH, size=(112, 64))
     cutloader = DataLoader(data, batch_size=1, num_workers=4, shuffle=True)
 
     # Prepare model, optim, loss
-    nets = {'corres': CorrespodenceNet(), 'color': Colornet()}
+    #nets = {'corres': CorrespodenceNet(), 'color': Colornet()}
+    nets = {'corres': CorrespodenceNet(), 'color': ExampleColorNet()}
     params = list(nets['corres'].parameters()) + list(nets['color'].parameters())
-    optimizer = Adam(params)
+    optimizer = Adam(params, lr=LEARNING_RATE, betas=BETAS, amsgrad=True)
     loss_fn = Loss()
 
     with torch.autograd.set_detect_anomaly(True):
