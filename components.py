@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import skimage.measure as measure
 import skimage.transform as transform
+import argparse
 from skimage.filters import threshold_otsu
 from tqdm import tqdm
 
@@ -124,13 +125,28 @@ def post_process(image):
     return out
 
 if __name__ == "__main__":
-    image = cv2.imread("./up_2.jpg")
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    out = post_process(image)
-    fig, axs = plt.subplots(1, 2)
-    axs[0].imshow(image)
-    axs[0].set_title("Original")
-    axs[1].imshow(out)
-    axs[1].set_title("PostProcessed")
-    cv2.imwrite("post_process.jpg", cv2.cvtColor(out, cv2.COLOR_RGB2BGR))
-    plt.show()
+    import os
+    parser = argparse.ArgumentParser()
+    parser.add_argument("res", help="Path to result folder")
+    parser.add_argument("dest", help="Path to folder containing postprocess")
+    args = parser.parse_args()
+    res_path = args.res
+    dest_path = args.dest
+
+    if not os.path.isdir(dest_path):
+        os.makedirs(dest_path)
+
+    for fname in os.listdir(res_path):
+        if fname.endswith("jpg"):
+            fpath = os.path.join(res_path, fname)
+            image = cv2.imread(fpath)
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            out = post_process(image)
+            # fig, axs = plt.subplots(1, 2)
+            # axs[0].imshow(image)
+            # axs[0].set_title("Original")
+            # axs[1].imshow(out)
+            # axs[1].set_title("PostProcessed")
+            postPath = os.path.join(dest_path, "post_"+fname)
+            cv2.imwrite(postPath, cv2.cvtColor(out, cv2.COLOR_RGB2BGR))
+            # plt.show()
