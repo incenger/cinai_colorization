@@ -34,13 +34,9 @@ class ResBlockColornet(nn.Module):
 
 
 
-class Colornet(nn.Module):
-    """
-    Colorization Net
-    """
-
+class ColorizationNet(nn.Module):
     def __init__(self):
-        super(Colornet, self).__init__()
+        super(ColorizationNet, self).__init__()
         use_bias = True
         norm_layer = nn.InstanceNorm2d
 

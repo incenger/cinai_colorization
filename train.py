@@ -1,8 +1,8 @@
 from dataset import Dataset
 from torch.utils.data import DataLoader
-from models.colornet import Colornet
+from models.colornet import ColorizationNet
 from models.corresnet import CorrespodenceNet
-from models.color import ExampleColorNet
+from models.color import AdditionalColorNet
 from loss import Loss
 from torch.optim import Adam
 import torch
@@ -11,8 +11,8 @@ import os
 import argparse
 
 parser = argparse.ArgumentParser(description='Train Colorization Model')
-parser.add_argument('--path', default='data', type=str, help='Path to the training data folder')
-parser.add_argument('--num_epochs', default=10, type=int, help='Number of epochs to train')
+parser.add_argument('-p', '--path', default='data/train', type=str, help='Path to the training data folder')
+parser.add_argument('-n', '--num_epochs', default=20, type=int, help='Number of epochs to train')
 opt = parser.parse_args()
 
 PATH = opt.path
@@ -94,7 +94,7 @@ def train(nets, epochs, dataloader, optimizer, loss_fn):
                 pred = nets['color'](prev, frame, W_ab, S)
 
                 pred = torch.cat((frame, pred), 1)
-                prev = gt if epoch < 7 else pred
+                prev = gt if epoch < 5 else pred
 
                 loss = loss_fn(pred, prev, gt, ref)
 
@@ -127,8 +127,8 @@ if __name__ == '__main__':
     cutloader = DataLoader(data, batch_size=1, num_workers=4, shuffle=True)
 
     # Prepare model, optim, loss
-    #nets = {'corres': CorrespodenceNet(), 'color': Colornet()}
-    nets = {'corres': CorrespodenceNet(), 'color': ExampleColorNet()}
+    #nets = {'corres': CorrespodenceNet(), 'color': ColorizationNet()}
+    nets = {'corres': CorrespodenceNet(), 'color': AdditionalColorNet()}
     params = list(nets['corres'].parameters()) + list(nets['color'].parameters())
     optimizer = Adam(params, lr=LEARNING_RATE, betas=BETAS, amsgrad=True)
     loss_fn = Loss()

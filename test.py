@@ -1,6 +1,6 @@
-from models.colornet import Colornet
+from models.colornet import ColorizationNet
 from models.corresnet import CorrespodenceNet
-from models.color import ExampleColorNet
+from models.color import AdditionalColorNet
 from torch.utils.data import DataLoader
 from skimage import color
 import torch
@@ -12,7 +12,7 @@ import numpy as np
 import argparse
 
 parser = argparse.ArgumentParser(description='Test Colorization Model')
-parser.add_argument('--path', default='test', type=str, help='Path to testing data folder')
+parser.add_argument('-p', '--path', default='data/test', type=str, help='Path to testing data folder')
 opt = parser.parse_args()
 
 PATH = opt.path
@@ -111,50 +111,55 @@ def load_image(path, size=(0, 0), mode='rgb'):
     return img.unsqueeze(0)
 
 if __name__ == '__main__':
+    import time
+    since = time.time()
     # Prepare paths
-    path = PATH
-    paths_frame = glob.glob(path + '/frames/*')
-    paths_frame.sort()
-    path_ref = glob.glob(path + '/ref/*')
+    paths = glob.glob(PATH + '/*')
+    print(paths)
+    for path in paths:
+        paths_frame = glob.glob(path + '/gray/*')
+        paths_frame.sort()
+        path_ref = glob.glob(path + '/ref/*')
 
-    # Prepare data
-    for idx, path_frame in enumerate(paths_frame):
-        img = load_image(path_frame, size=(112, 64), mode='gray')
-        img_ori = load_image(path_frame, mode='gray')
+        # Prepare data
+        for idx, path_frame in enumerate(paths_frame):
+            img = load_image(path_frame, size=(112, 64), mode='gray')
+            img_ori = load_image(path_frame, mode='gray')
 
-        if idx == 0:
-            frames = img
-            ori = img_ori
-        else:
-            frames = torch.cat((frames, img), 0)
-            ori = torch.cat((ori, img_ori), 0)
+            if idx == 0:
+                frames = img
+                ori = img_ori
+            else:
+                frames = torch.cat((frames, img), 0)
+                ori = torch.cat((ori, img_ori), 0)
 
-    ref = load_image(path_ref[0], size=(112, 64), mode='lab')
-    
-    # Prepare model
-    #nets = {'corres': CorrespodenceNet(), 'color': Colornet()}
-    nets = {'corres': CorrespodenceNet(), 'color': ExampleColorNet()}
-    res = test(nets, frames, ref)
-    print('Get result!')
+        ref = load_image(path_ref[0], size=(112, 64), mode='lab')
+        
+        # Prepare model
+        #nets = {'corres': CorrespodenceNet(), 'color': Colorizationnet()}
+        nets = {'corres': CorrespodenceNet(), 'color': AdditionalColorNet()}
+        res = test(nets, frames, ref)
+        print('Get result!')
 
-    if not os.path.isdir(path + '/res'):
-        os.mkdir(path + '/res')
+        if not os.path.isdir(path + '/res'):
+            os.mkdir(path + '/res')
 
-    for idx, image in enumerate(res):
-        if torch.cuda.is_available():
-            image = image.cpu()
-        image[0] += 50.
-        image = image.permute(1, 2, 0).numpy().astype(np.float64)
-        small = color.lab2rgb(image).astype(np.float32)
-        small = (255*small).astype(np.uint8)
-        small = cv2.cvtColor(small, cv2.COLOR_RGB2BGR)
-        cv2.imwrite(path + '/res/' + str(idx) + '.jpg', small)
+        for idx, image in enumerate(res):
+            if torch.cuda.is_available():
+                image = image.cpu()
+            image[0] += 50.
+            image = image.permute(1, 2, 0).numpy().astype(np.float64)
+            #small = color.lab2rgb(image).astype(np.float32)
+            #small = (255*small).astype(np.uint8)
+            #small = cv2.cvtColor(small, cv2.COLOR_RGB2BGR)
+            #cv2.imwrite(path + '/res/' + str(idx) + '.jpg', small)
 
-        # Save upscale image
-        big = cv2.resize(image, (1920, 1080), interpolation=cv2.INTER_CUBIC)
-        big[:, :, 0] = ori[idx].numpy().astype(np.float64) + 50.  # Use the original L-channel
-        big = color.lab2rgb(big).astype(np.float32)
-        big = (255*big).astype(np.uint8)
-        big = cv2.cvtColor(big, cv2.COLOR_RGB2BGR)
-        cv2.imwrite(path + '/res/up_' + str(idx) + '.jpg', big)
-    print('Done')
+            # Save upscale image
+            big = cv2.resize(image, (1920, 1080), interpolation=cv2.INTER_CUBIC)
+            big[:, :, 0] = ori[idx].numpy().astype(np.float64) + 50.  # Use the original L-channel
+            big = color.lab2rgb(big).astype(np.float32)
+            big = (255*big).astype(np.uint8)
+            big = cv2.cvtColor(big, cv2.COLOR_RGB2BGR)
+            cv2.imwrite(path + '/res/2_' + str(idx) + '.jpg', big)
+    taken_time = time.time() - since
+    print('Done in %dm%ds' % (taken_time//60, taken_time%60))
